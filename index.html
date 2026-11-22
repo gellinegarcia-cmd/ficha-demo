@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>DEMO — Guardias UPA</title><meta name="robots" content="noindex">
+
+<meta charset="utf-8">
+<style>
+  :root {
+    --fondo: #f3f5f8; --tarjeta: #fff; --texto: #1c2733; --suave: #5b6876; --borde: #d8dee6;
+    --primario: #1a56a8; --primario-texto: #fff;
+    --prevista: #dfe5ec; --confirmada: #bfe6c9; --cubierta: #d9c8f0; --reemplazo: #a9d4f5;
+    --anticipada: #a8e6dc; --vacaciones: #fbe0b5; --espera: #fdeb9c; --conflicto: #f6b3b0;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--fondo); color: var(--texto); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+  header { background: var(--primario); color: #fff; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  header b { font-size: 17px; }
+  header button { background: none; border: 1px solid #ffffff80; color: #fff; border-radius: 8px; padding: 6px 10px; font-size: 14px; cursor: pointer; }
+  main { max-width: 720px; margin: 0 auto; padding: 12px 16px 96px; }
+  main.ancho { max-width: 1200px; }
+  h2 { font-size: 20px; margin: 8px 0 12px; }
+  h3 { font-size: 16px; margin: 16px 0 8px; }
+  .tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+  .regla { background: #fff7d6; border: 1px solid #ecd98a; border-radius: 12px; padding: 10px 14px; font-size: 14px; margin-bottom: 12px; }
+  .destacado { font-size: 18px; font-weight: 600; }
+  .suave { color: var(--suave); font-size: 14px; }
+  .error { background: #fde4e3; border: 1px solid #efb0ad; color: #8c1d18; padding: 10px 14px; border-radius: 10px; margin-bottom: 12px; }
+  .ok { background: #e1f5e6; border: 1px solid #a8dbb5; color: #17602d; padding: 10px 14px; border-radius: 10px; margin-bottom: 12px; }
+  button.grande, a.grande { display: block; width: 100%; min-height: 52px; padding: 12px 14px; margin-bottom: 10px; font-size: 17px; font-weight: 600; border-radius: 12px; border: 1px solid var(--primario); background: var(--primario); color: var(--primario-texto); cursor: pointer; text-align: center; text-decoration: none; }
+  button.sec { background: #fff; color: var(--primario); }
+  button.peligro { background: #fff; color: #a3211c; border-color: #a3211c; }
+  button.chico { min-height: 40px; padding: 6px 12px; font-size: 14px; font-weight: 600; border-radius: 8px; border: 1px solid var(--primario); background: #fff; color: var(--primario); cursor: pointer; margin: 0 6px 6px 0; }
+  button:disabled { opacity: .55; cursor: wait; }
+  label { display: block; font-weight: 600; margin: 10px 0 4px; font-size: 15px; }
+  input, select { width: 100%; min-height: 48px; padding: 8px 10px; font-size: 17px; border: 1px solid #aeb8c4; border-radius: 10px; background: #fff; color: var(--texto); }
+  input[type=checkbox] { width: 22px; min-height: 22px; height: 22px; vertical-align: middle; }
+  nav { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid var(--borde); display: flex; overflow-x: auto; z-index: 5; }
+  nav button { flex: 1 0 auto; min-width: 68px; min-height: 58px; background: none; border: none; font-size: 13px; color: var(--suave); padding: 6px 8px; cursor: pointer; }
+  nav button.activo { color: var(--primario); font-weight: 700; box-shadow: inset 0 3px 0 var(--primario); }
+  .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+  .cal .cab { text-align: center; font-size: 12px; color: var(--suave); padding: 2px 0; }
+  .dia { display: flex; flex-direction: column; justify-content: flex-start; min-height: 54px; background: #fff; border: 1px solid var(--borde); border-radius: 8px; padding: 3px; font-size: 13px; text-align: left; color: var(--texto); }
+  button.dia { cursor: pointer; }
+  .dia.nh .num { color: #b3261e; font-weight: 700; }
+  .dia.hoy { outline: 2px solid var(--primario); outline-offset: -1px; }
+  .dia.vac { background: var(--vacaciones); }
+  .ficha { display: block; border-radius: 5px; padding: 1px 3px; font-size: 12px; font-weight: 600; text-align: center; margin-top: 2px; }
+  .c-prevista { background: var(--prevista); } .c-confirmada { background: var(--confirmada); } .c-cubierta { background: var(--cubierta); }
+  .c-reemplazo { background: var(--reemplazo); } .c-anticipada { background: var(--anticipada); } .c-espera { background: var(--espera); } .c-conflicto { background: var(--conflicto); } .c-vacaciones { background: var(--vacaciones); }
+  .leyenda { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; font-size: 12px; }
+  .leyenda span { border-radius: 5px; padding: 2px 6px; }
+  .mesnav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; }
+  .mesnav button { min-width: 48px; min-height: 44px; background: #fff; border: 1px solid var(--borde); border-radius: 10px; font-size: 18px; cursor: pointer; }
+  .mesnav b { font-size: 18px; text-align: center; }
+  .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: collapse; font-size: 13px; background: #fff; }
+  th, td { border: 1px solid #c9d1da; padding: 3px 5px; text-align: center; }
+  .grilla th:first-child, .grilla td:first-child { position: sticky; left: 0; background: #fff; text-align: left; white-space: nowrap; z-index: 1; }
+  .grilla th.nh { color: #b3261e; }
+  table.rrhh { font-family: Arial, sans-serif; white-space: nowrap; }
+  table.rrhh .t1 { background: #6D9EEB; font-weight: 700; font-size: 15px; text-align: left; }
+  table.rrhh .t2 { background: #9FC5E8; font-weight: 700; }
+  .fila { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #edf0f4; }
+  .fila:last-child { border-bottom: none; }
+  .cargando { text-align: center; color: var(--suave); padding: 32px 0; }
+  .marca { background: #fff0c2; border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+  .opciones { display: flex; gap: 6px; }
+  .opciones button { flex: 1 1 0; min-height: 48px; padding: 6px; font-size: 15px; font-weight: 600; border-radius: 10px; border: 1px solid var(--primario); background: #fff; color: var(--primario); cursor: pointer; }
+  .opciones button[aria-pressed=true] { background: var(--primario); color: #fff; }
+  .opciones button:disabled { opacity: .45; cursor: not-allowed; }
+  #fijo { position: fixed; left: 0; right: 0; bottom: 58px; padding: 8px 16px; background: linear-gradient(transparent, var(--fondo) 30%); z-index: 4; }
+  #fijo button { display: block; width: 100%; max-width: 688px; margin: 0 auto; min-height: 52px; font-size: 17px; font-weight: 700; border-radius: 12px; border: none; background: #17602d; color: #fff; cursor: pointer; box-shadow: 0 2px 6px #0003; }
+  main.confijo { padding-bottom: 170px; }
+</style>
+</head>
+<body><div id="demo-cartel" style="background:#b45309;color:#fff;padding:8px 12px;font:600 14px/1.35 system-ui,Arial,sans-serif;text-align:center">
+  DEMO — datos de prueba
+  <div style="font-weight:400;font-size:12px;margin-top:2px">Todos los PIN: 1111 · Jefe: JAVIER GARCIA · No usa la planilla real ni manda mensajes</div>
+  <div style="margin-top:6px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+    <button type="button" id="demo-mensajes" style="font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer">Mensajes simulados</button>
+    <button type="button" id="demo-reiniciar" style="font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer">Reiniciar demo</button>
+  </div>
+</div>
+<div id="demo-panel" hidden style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);overflow:auto;padding:16px;box-sizing:border-box">
+  <div style="background:#fff;border-radius:12px;max-width:460px;margin:0 auto;padding:14px;font:14px/1.4 system-ui,Arial,sans-serif;color:#1a1a1a">
+    <div style="display:flex;justify-content:space-between;align-items:center"><b>Mensajes que mandaría la app</b>
+      <button type="button" id="demo-cerrar" style="font:inherit;padding:6px 12px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer">Cerrar</button></div>
+    <div id="demo-lista" style="margin-top:10px"></div>
+  </div>
+</div>
+<script>
+(function () {
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  document.getElementById('demo-reiniciar').onclick = async () => {
+    (await window.demoServidor()).demoReiniciar();
+    try { Object.keys(localStorage).forEach((k) => { if (/guardia/i.test(k)) localStorage.removeItem(k); }); } catch (e) {}
+    location.href = location.pathname;
+  };
+  document.getElementById('demo-cerrar').onclick = () => { document.getElementById('demo-panel').hidden = true; };
+  document.getElementById('demo-mensajes').onclick = async () => {
+    const m = (await window.demoServidor()).demoMensajes();
+    const tg = m.telegram.map((t) => '<div style="background:#eef6ea;border-radius:10px;padding:8px 10px;margin:8px 0"><div style="font-size:12px;color:#555">Telegram a ' + esc(t.a) + '</div>' +
+      esc(t.texto).replace(/\n/g, '<br>') + (t.botones.length ? '<div style="margin-top:6px;font-size:12px;color:#335">Botones: ' + t.botones.map((f) => f.map(esc).join(' | ')).join(' / ') + '</div>' : '') + '</div>').join('');
+    const ml = m.mails.map((x) => '<div style="background:#f1f3f4;border-radius:10px;padding:8px 10px;margin:8px 0"><div style="font-size:12px;color:#555">Mail a ' + esc(x.a) + '</div><b>' + esc(x.asunto) + '</b><br>' + esc(x.cuerpo).replace(/\n/g, '<br>') + '</div>').join('');
+    document.getElementById('demo-lista').innerHTML = (tg + ml) || '<p>Todavía no se generó ningún mensaje.</p>';
+    document.getElementById('demo-panel').hidden = false;
+  };
+})();
+</script>
+<header id="cab" hidden><b id="cab-nombre"></b><span><button id="btn-jefe" hidden></button> <button id="btn-salir">Salir</button></span></header>
+<main id="app"><div class="cargando">Cargando…</div></main>
+<div id="fijo" hidden><button id="btn-cargar">+ Cargar guardia</button></div>
+<nav id="nav" hidden></nav>
+<script>
+// DEMO: google.script.run llama al simulador que corre en un marco oculto (servidor.html).
+(function () {
+  const marco = document.createElement('iframe');
+  marco.src = 'servidor.html';
+  marco.title = 'simulador';
+  marco.style.display = 'none';
+  const listo = new Promise((res) => marco.addEventListener('load', () => res(marco.contentWindow)));
+  document.documentElement.appendChild(marco);
+  window.demoServidor = () => listo;
+  window.google = { script: { get run() {
+    const crear = (ok, mal) => new Proxy({}, { get(_, k) {
+      if (k === 'withSuccessHandler') return (f) => crear(f, mal);
+      if (k === 'withFailureHandler') return (f) => crear(ok, f);
+      return (...args) => listo
+        .then((s) => new Promise((r) => setTimeout(r, 80)).then(() => s.demoLlamar(k, args)))
+        .then((d) => ok && ok(d))
+        .catch((e) => mal && mal({ message: e && e.message ? e.message : String(e) }));
+    } });
+    return crear();
+  } } };
+})();
+</script><script>
+const INICIO = (function () {
+  const p = new URLSearchParams(location.search);
+  return { v: /^[a-z]{1,20}$/.test(p.get('v') || '') ? p.get('v') : '', g: /^\d{1,9}$/.test(p.get('g') || '') ? p.get('g') : '' };
+})();
+const CLAVE = 'guardias_upa_sesion';
+const DIAS_CAB = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+const TIPOS = { CONTRATO: 'Contrato', REEMPLAZO_HOSPITAL: 'Paga el hospital', COBERTURA_COMPANERO: 'Paga el compañero' };
+const ESTADOS = { PREVISTA: 'Prevista', CONFIRMADA: 'Confirmada', CONFIRMADA_ANTICIPADA: 'Confirmada por adelantado', ESPERANDO_CONFIRMACION_TITULAR: 'Esperando confirmación', EN_CONFLICTO: 'En conflicto', ANULADA: 'Anulada' };
+const NAV_MEDICO = [['mes', 'Mi mes'], ['vacaciones', 'Vacaciones'], ['deudas', 'Deudas'], ['contrato', 'Guardia fija']];
+const NAV_JEFE = [['tablero', 'Tablero'], ['conflictos', 'Conflictos'], ['excel', 'Excel'], ['medicos', 'Médicos'], ['ajustes', 'Ajustes']];
+const VISTAS_JEFE = NAV_JEFE.map(n => n[0]);
+
+let token = leer();
+let datos = null;
+let vista = 'mes';
+let modoJefe = false;
+let mesActual = null;
+let aviso = null;
+const $ = (id) => document.getElementById(id);
+
+function leer() { try { return localStorage.getItem(CLAVE) || ''; } catch (e) { return ''; } }
+function escribir(v) { try { v ? localStorage.setItem(CLAVE, v) : localStorage.removeItem(CLAVE); } catch (e) {} }
+
+// Crea nodos uno por uno: los nombres y textos de la planilla nunca se interpretan como HTML.
+function el(tag, props, ...hijos) {
+  const n = document.createElement(tag);
+  Object.entries(props || {}).forEach(([k, v]) => {
+    if (v === undefined || v === null || v === false) return;
+    if (k === 'class') n.className = v;
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else if (k in n && k !== 'list') n[k] = v;
+    else n.setAttribute(k, v);
+  });
+  hijos.flat().forEach((h) => { if (h !== null && h !== undefined && h !== false) n.append(h.nodeType ? h : String(h)); });
+  return n;
+}
+
+function llamar(metodo, ...args) {
+  return new Promise((ok, mal) => {
+    google.script.run
+      .withSuccessHandler((r) => {
+        if (r && r.ok) return ok(r.datos);
+        if (r && r.sesion) { salir(); return mal(new Error(r.error)); }
+        mal(new Error((r && r.error) || 'Hubo un error.'));
+      })
+      .withFailureHandler(() => mal(new Error('No hay conexión. Probá de nuevo.')))
+      .api(token, metodo, args);
+  });
+}
+
+function pintar(...nodos) {
+  const app = $('app');
+  app.className = modoJefe && (vista === 'tablero' || vista === 'excel') ? 'ancho' : (!modoJefe && vista === 'mes' ? 'confijo' : '');
+  app.replaceChildren(...nodos.flat().filter(Boolean));
+  window.scrollTo(0, 0);
+}
+function cargando() { pintar(el('div', { class: 'cargando' }, 'Cargando…')); }
+function mostrarError(e) { pintar(el('div', { class: 'error' }, e.message), el('button', { class: 'grande sec', onclick: () => ir(vista) }, 'Reintentar')); }
+function bloqueAviso() {
+  if (!aviso) return null;
+  const a = aviso;
+  aviso = null;
+  return el('div', { class: a.error ? 'error' : 'ok', role: 'status' }, a.texto,
+    a.deshacer ? el('div', { style: 'margin-top:8px' }, botonDeshacer(a.deshacer)) : null);
+}
+function botonDeshacer(id) {
+  return el('button', { class: 'chico', onclick: accion(async () => { await llamar('deshacer', id); aviso = { texto: 'Deshecho.' }; ir('mes'); }) }, 'Deshacer');
+}
+// Botón que se desactiva mientras espera: evita confirmar dos veces por tocar dos veces.
+function accion(fn) {
+  return async (ev) => {
+    const b = ev.currentTarget;
+    b.disabled = true;
+    try { await fn(); } catch (e) { aviso = { texto: e.message, error: true }; b.disabled = false; ir(vista); }
+  };
+}
+function fechaLinda(f) { const p = f.split('-'); return Number(p[2]) + '/' + p[1] + '/' + p[0]; }
+function categoriaLocal(f) {
+  const d = new Date(f + 'T12:00:00').getDay();
+  return d === 0 || d === 6 || datos.feriados.includes(f) ? 'no hábil' : 'hábil';
+}
+function sumarMes(m, n) { const d = new Date(Date.UTC(+m.slice(0, 4), +m.slice(5) - 1 + n, 1)); return d.toISOString().slice(0, 7); }
+function navMes(titulo, cambiar) {
+  return el('div', { class: 'mesnav' },
+    el('button', { 'aria-label': 'Mes anterior', onclick: () => { mesActual = sumarMes(mesActual, -1); cambiar(); } }, '‹'),
+    el('b', null, titulo),
+    el('button', { 'aria-label': 'Mes siguiente', onclick: () => { mesActual = sumarMes(mesActual, 1); cambiar(); } }, '›'));
+}
+
+// --- Ingreso ---
+async function pantallaLogin() {
+  $('cab').hidden = true;
+  $('nav').hidden = true;
+  $('fijo').hidden = true;
+  cargando();
+  google.script.run.withSuccessHandler((lista) => {
+    const sel = el('select', { id: 'quien' }, el('option', { value: '' }, 'Elegí tu nombre…'), lista.map((m) => el('option', { value: m.id }, m.nombre)));
+    const pin = el('input', { id: 'pin', type: 'password', inputMode: 'numeric', maxLength: 4, autocomplete: 'current-password', pattern: '[0-9]*' });
+    const error = el('div', { class: 'error', hidden: true, role: 'alert' });
+    const boton = el('button', { class: 'grande', type: 'submit' }, 'Entrar');
+    const form = el('form', { onsubmit: (ev) => {
+      ev.preventDefault();
+      error.hidden = true;
+      if (!sel.value || pin.value.length !== 4) { error.textContent = 'Elegí tu nombre y escribí tu PIN de 4 números.'; error.hidden = false; return; }
+      boton.disabled = true;
+      google.script.run.withSuccessHandler((r) => {
+        if (r.ok) { token = r.token; escribir(token); arrancar(); return; }
+        error.textContent = r.error; error.hidden = false; boton.disabled = false; pin.value = '';
+      }).withFailureHandler(() => { error.textContent = 'No hay conexión. Probá de nuevo.'; error.hidden = false; boton.disabled = false; }).login(sel.value, pin.value);
+    } }, el('label', { htmlFor: 'quien' }, 'Nombre'), sel, el('label', { htmlFor: 'pin' }, 'PIN'), pin, el('br'), boton);
+    pintar(el('h2', null, 'Guardias UTI UPA 5'), error, el('div', { class: 'tarjeta' }, form), el('div', { class: 'regla' }, 'Cargar es la forma de cobrar: lo que no esté confirmado al cierre del mes se reclama en el cierre siguiente.'));
+  }).withFailureHandler(() => mostrarError(new Error('No hay conexión. Probá de nuevo.'))).medicosPublico();
+}
+
+function salir() { token = ''; escribir(''); datos = null; modoJefe = false; pantallaLogin(); }
+
+async function arrancar() {
+  if (!token) return pantallaLogin();
+  cargando();
+  try { datos = await llamar('inicio'); } catch (e) { if (token) mostrarError(e); return; }
+  mesActual = datos.hoy.slice(0, 7);
+  $('cab').hidden = false;
+  $('cab-nombre').textContent = datos.yo.nombre;
+  $('btn-jefe').hidden = !datos.yo.admin;
+  if (datos.revisar_contrato) return pantallaRevisarContrato();
+  seguirAlInicio();
+}
+
+function seguirAlInicio() {
+  let inicial = INICIO.v || 'mes';
+  if (VISTAS_JEFE.includes(inicial)) modoJefe = !!datos.yo.admin;
+  INICIO.v = '';
+  if (inicial === 'confirmar' && INICIO.g) return irConfirmar(INICIO.g);
+  ir(inicial === 'confirmar' ? 'mes' : inicial);
+}
+
+// Primer ingreso: revisa la guardia fija que se le cargó.
+function pantallaRevisarContrato() {
+  const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  const lineas = datos.fijas.map((f) => el('div', { class: 'destacado', style: 'margin-bottom:6px' }, capital(f.dia_semana) + ' · ' + f.turno,
+    el('div', { class: 'suave', style: 'font-weight:400' }, f.tipo === 'REEMPLAZO_HOSPITAL' ? 'Reemplazo fijo (paga el hospital)' : 'Contrato')));
+  pintar(el('h2', null, '¿Es correcta tu guardia de contrato?'),
+    el('div', { class: 'tarjeta' }, lineas.length ? lineas : el('span', { class: 'suave' }, 'Todavía no tenés una guardia cargada.')),
+    el('button', { class: 'grande', onclick: accion(async () => { await llamar('confirmarContrato'); datos.revisar_contrato = false; seguirAlInicio(); }) }, 'Sí'),
+    el('button', { class: 'grande sec', onclick: () => { datos.revisar_contrato = false; ir('contrato'); } }, 'Corregir'));
+}
+
+function ir(v) {
+  vista = v;
+  pintarNav();
+  const pantallas = { mes: verMes, cargar: () => verCargar(datos.hoy), vacaciones: verVacaciones, deudas: verDeudas, contrato: verContrato,
+    tablero: verTablero, conflictos: verConflictos, excel: verExcel, medicos: verMedicos, ajustes: verAjustes };
+  (pantallas[v] || verMes)();
+}
+function pintarNav() {
+  const nav = $('nav');
+  nav.hidden = false;
+  $('fijo').hidden = modoJefe || vista !== 'mes';
+  $('btn-jefe').textContent = modoJefe ? 'Vista médico' : 'Vista jefe';
+  nav.replaceChildren(...(modoJefe ? NAV_JEFE : NAV_MEDICO).map(([k, t]) => el('button', { class: vista === k ? 'activo' : '', onclick: () => ir(k) }, t)));
+}
+$('btn-salir').addEventListener('click', salir);
+$('btn-cargar').addEventListener('click', () => verCargar(datos.hoy));
+$('btn-jefe').addEventListener('click', () => { modoJefe = !modoJefe; ir(modoJefe ? 'tablero' : 'mes'); });
+
+// --- Médico: Mi mes ---
+const NOMBRE_COLOR = { prevista: 'Prevista', confirmada: 'Confirmada', cubierta: 'Cubierta', reemplazo: 'Reemplazo', espera: 'Esperando', conflicto: 'Conflicto' };
+async function verMes() {
+  cargando();
+  let d;
+  try { d = await llamar('miMes', mesActual); } catch (e) { return mostrarError(e); }
+  const primero = (new Date(d.dias[0].fecha + 'T12:00:00').getDay() + 6) % 7;
+  const celdas = DIAS_CAB.map((c) => el('div', { class: 'cab' }, c));
+  for (let i = 0; i < primero; i++) celdas.push(el('div'));
+  d.dias.forEach((dia) => {
+    const clase = 'dia' + (dia.no_habil ? ' nh' : '') + (dia.fecha === datos.hoy ? ' hoy' : '') + (dia.vacaciones ? ' vac' : '');
+    const fichas = dia.guardias.map((g) => el('span', { class: 'ficha c-' + g.color }, g.texto));
+    // Cualquier día se puede tocar: con guardia abre esa guardia, y vacío abre la carga.
+    celdas.push(el('button', {
+      class: clase,
+      'aria-label': 'Día ' + fechaLinda(dia.fecha) + (dia.guardias.length ? ', con guardia' : ', cargar guardia'),
+      'data-fecha': dia.fecha,
+      onclick: () => (dia.guardias.length ? irConfirmar(dia.guardias[0].id) : verCargar(dia.fecha))
+    }, el('span', { class: 'num' }, Number(dia.fecha.slice(8))), fichas));
+  });
+  const leyenda = [['prevista', 'Prevista'], ['confirmada', 'Confirmada'], ['anticipada', 'Por adelantado'], ['cubierta', 'Cubierta'], ['reemplazo', 'Reemplazo'], ['vacaciones', 'Vacaciones'], ['espera', 'Esperando'], ['conflicto', 'Conflicto']];
+  pintar(
+    bloqueAviso(),
+    el('div', { class: 'tarjeta' }, el('div', { class: 'destacado' }, 'Reemplazos confirmados este mes: ' + d.reemplazos + (d.reemplazos ? ', se cobran el ' + d.cobro : '')),
+      d.reemplazos ? null : el('div', { class: 'suave' }, 'Lo de este mes se cobra el ' + d.cobro + '.')),
+    el('div', { class: 'regla' }, datos.regla),
+    d.cerrado ? el('div', { class: 'regla' }, 'Este mes ya cerró. Lo que falte se carga como "reclamo mes anterior".') : null,
+    d.ventana ? el('div', { class: 'regla' }, d.ventana) : null,
+    d.pendientes.length ? el('div', { class: 'tarjeta' },
+      el('h3', { style: 'margin-top:0' }, 'Para confirmar (' + d.pendientes.length + ')'),
+      d.pendientes.map((g) => el('button', { class: 'grande', onclick: () => irConfirmar(g.id) }, fechaLinda(g.fecha) + ' · ' + g.turno_nombre))) : null,
+    navMes(d.titulo, verMes),
+    el('div', { class: 'cal' }, celdas),
+    el('div', { class: 'leyenda' }, leyenda.map(([c, t]) => el('span', { class: 'c-' + c }, t))),
+    d.guardias.length ? el('div', null, el('h3', null, 'Mis guardias del mes'), d.guardias.map((g) => filaGuardia(g))) : null,
+    datos.yo.telegram || !datos.yo.enlace_telegram ? null : el('a', { class: 'grande', href: datos.yo.enlace_telegram, target: '_blank', rel: 'noopener' }, 'Recibir avisos por Telegram')
+  );
+}
+function textoCobertura(g) {
+  if (g.es_titular && g.hizo && !g.es_hizo) return 'Cubierta por ' + g.hizo;
+  if (g.es_hizo && g.titular && !g.es_titular) return 'Cubrís a ' + g.titular;
+  if (g.es_hizo && !g.titular) return 'Puesto vacante';
+  if (g.es_titular && !g.hizo) return 'Sin cubrir';
+  return '';
+}
+// Cada guardia con su menú, según el estado y si el mes está abierto.
+function filaGuardia(g) {
+  return el('div', { class: 'tarjeta', 'data-guardia': g.id },
+    el('b', null, fechaLinda(g.fecha) + ' · ' + g.turno_nombre),
+    el('div', { class: 'suave' }, [ESTADOS[g.estado] || g.estado, textoCobertura(g), g.tipo !== 'CONTRATO' ? TIPOS[g.tipo] : ''].filter(Boolean).join(' · ')),
+    g.reclamo ? el('div', null, el('span', { class: 'marca' }, 'reclamo mes anterior')) : null,
+    el('div', { style: 'margin-top:8px' }, botonesMenu(g)));
+}
+function botonesMenu(g) {
+  const b = [];
+  if (g.deshacer_min) b.push(botonDeshacer(g.id), el('span', { class: 'suave', style: 'margin-right:6px' }, 'quedan ' + g.deshacer_min + ' min'));
+  if (g.debe_responder || g.puede_hago_yo || g.puede_cubrir || g.control_pendiente) b.push(el('button', { class: 'chico', onclick: () => irConfirmar(g.id) }, 'Abrir'));
+  if (g.acciones.includes('editar')) b.push(el('button', { class: 'chico', onclick: () => pintarEditar(g) }, 'Editar'));
+  if (g.acciones.includes('desmarcar')) b.push(el('button', { class: 'chico', onclick: accion(async () => { await llamar('desmarcarGuardia', g.id); aviso = { texto: 'Guardia desmarcada.' }; ir('mes'); }) }, 'Desmarcar'));
+  if (g.acciones.includes('anular')) b.push(el('button', { class: 'chico', onclick: accion(async () => { await llamar('anularGuardia', g.id); aviso = { texto: 'Guardia anulada.' }; ir('mes'); }) }, 'Anular'));
+  return b;
+}
+
+// --- Médico: Confirmar guardia ---
+async function irConfirmar(id) {
+  vista = 'guardia';
+  pintarNav();
+  cargando();
+  let g;
+  try { g = await llamar('guardia', id); } catch (e) { aviso = { texto: e.message, error: true }; return ir('mes'); }
+  pintarConfirmar(g);
+}
+function resumenGuardia(g) {
+  return el('div', { class: 'tarjeta' },
+    el('div', { class: 'destacado' }, fechaLinda(g.fecha) + ' · ' + g.turno_nombre),
+    el('div', null, g.categoria === 'NO_HABIL' ? 'No hábil' : 'Hábil', ' · ', ESTADOS[g.estado] || g.estado),
+    textoCobertura(g) ? el('div', { class: 'suave' }, textoCobertura(g)) : null,
+    g.tipo !== 'CONTRATO' ? el('div', { class: 'suave' }, TIPOS[g.tipo]) : null,
+    g.reclamo ? el('div', null, el('span', { class: 'marca' }, 'reclamo mes anterior: se cobra con ' + g.mes_facturacion)) : null);
+}
+function pintarConfirmar(g) {
+  const hecho = (t, r) => { aviso = { texto: t, deshacer: r && r.deshacer_min ? r.id : null }; ir('mes'); };
+  const nodos = [bloqueAviso(), resumenGuardia(g)];
+  if (g.control_pendiente) {
+    const responder = (r, t) => accion(async () => { hecho(t, await llamar('responderControl', g.id, r)); });
+    nodos.push(el('h3', null, '¿Hiciste la guardia de hoy?'));
+    nodos.push(el('button', { class: 'grande', onclick: responder('SI', 'Anotado.') }, 'Sí'));
+    nodos.push(el('button', { class: 'grande sec', onclick: () => pintarControlCubierta(g) }, 'No, me cubrió alguien'));
+    nodos.push(el('button', { class: 'grande peligro', onclick: responder('NO_SE_HIZO', 'Anotado. Queda el ajuste para el mes siguiente.') }, 'No se hizo'));
+    nodos.push(el('button', { class: 'grande sec', onclick: () => ir('mes') }, 'Volver'));
+    return pintar(nodos);
+  }
+  if (g.cerrado && !g.estado.startsWith('CONFIRMADA')) nodos.push(el('div', { class: 'regla' }, 'Este mes ya cerró: si confirmás ahora, se cobra con el cierre siguiente como "reclamo mes anterior".'));
+  if (g.debe_responder) {
+    const texto = g.estado === 'EN_CONFLICTO' ? '¿Se hizo esta cobertura?' : g.es_hizo ? '¿Confirmás que hacés esta guardia?' : '¿Te cubren esta guardia?';
+    nodos.push(el('h3', null, texto));
+    nodos.push(el('button', { class: 'grande', onclick: accion(async () => { hecho('Anotado.', await llamar('responder', g.id, true)); }) }, 'Sí'));
+    nodos.push(el('button', { class: 'grande peligro', onclick: accion(async () => { hecho('Anotado.', await llamar('responder', g.id, false)); }) }, 'No'));
+  }
+  // Si le están preguntando algo, solo Sí o No. En un conflicto sí puede cambiar quién la hizo.
+  const soloResponder = g.debe_responder && g.estado !== 'EN_CONFLICTO';
+  if (g.puede_hago_yo && !soloResponder) nodos.push(el('button', { class: 'grande', onclick: accion(async () => { hecho(g.anticipable ? 'Confirmada por adelantado.' : 'Guardia confirmada.', await llamar('hagoYo', g.id)); }) }, g.anticipable ? 'La hago yo (confirmar por adelantado)' : 'La hago yo'));
+  if (g.puede_cubrir && !soloResponder) nodos.push(el('button', { class: 'grande sec', onclick: () => pintarMeCubre(g) }, 'Me cubre…'));
+  nodos.push(el('div', { style: 'margin:10px 0' }, botonesMenu(Object.assign({}, g, { debe_responder: false, puede_hago_yo: false, puede_cubrir: false }))));
+  if (!g.acciones.length && g.cerrado) nodos.push(el('div', { class: 'regla' }, 'Este mes ya cerró y no se puede editar. Lo que falte, cargalo como "reclamo mes anterior" con + Cargar guardia.'));
+  nodos.push(el('button', { class: 'grande sec', onclick: () => ir('mes') }, 'Volver'));
+  pintar(nodos);
+}
+function pintarControlCubierta(g) {
+  const quien = el('select', { id: 'cc-quien' }, el('option', { value: '' }, 'Elegí…'), datos.companeros.map((c) => el('option', { value: c.id }, c.nombre)));
+  const paga = selectorPaga(g.tipo === 'REEMPLAZO_HOSPITAL' ? g.tipo : 'COBERTURA_COMPANERO');
+  pintar(resumenGuardia(g), el('div', { class: 'regla' }, 'La cobertura entra en el mes siguiente y tu compañero la tiene que confirmar.'),
+    el('div', { class: 'tarjeta' }, el('label', { htmlFor: 'cc-quien' }, '¿Quién te cubrió?'), quien, el('label', null, '¿Quién paga?'), paga.nodo, el('br'),
+      el('button', { class: 'grande', onclick: accion(async () => {
+        if (!quien.value) throw new Error('Elegí quién te cubrió.');
+        const r = await llamar('responderControl', g.id, 'CUBIERTA', { cubridor: quien.value, tipo: paga.valor() });
+        aviso = { texto: 'Le pedimos a ' + quien.selectedOptions[0].textContent + ' que confirme.', deshacer: r.id };
+        ir('mes');
+      }) }, 'Guardar')),
+    el('button', { class: 'grande sec', onclick: () => pintarConfirmar(g) }, 'Volver'));
+}
+function selectorPaga(inicial, alCambiar) {
+  let valor = inicial;
+  const hosp = el('button', { type: 'button', id: 'paga-hospital' }, 'El hospital (reemplazo)');
+  const comp = el('button', { type: 'button', id: 'paga-companero' }, 'Mi compañero');
+  const pintarSel = () => {
+    hosp.setAttribute('aria-pressed', valor === 'REEMPLAZO_HOSPITAL');
+    comp.setAttribute('aria-pressed', valor === 'COBERTURA_COMPANERO');
+  };
+  const poner = (v) => { valor = v; pintarSel(); if (alCambiar) alCambiar(v); };
+  hosp.addEventListener('click', () => poner('REEMPLAZO_HOSPITAL'));
+  comp.addEventListener('click', () => poner('COBERTURA_COMPANERO'));
+  pintarSel();
+  return {
+    nodo: el('div', { class: 'opciones' }, hosp, comp),
+    valor: () => valor,
+    poner: (v) => { valor = v; pintarSel(); },
+    bloquearCompanero: (si) => { comp.disabled = si; if (si) { valor = 'REEMPLAZO_HOSPITAL'; pintarSel(); } }
+  };
+}
+function pintarMeCubre(g) {
+  const quien = el('select', { id: 'mc-quien' }, el('option', { value: '' }, 'Elegí…'), datos.companeros.map((c) => el('option', { value: c.id }, c.nombre)), el('option', { value: 'nose' }, 'Todavía no sé quién'));
+  const paga = selectorPaga(g.sugerido || 'COBERTURA_COMPANERO');
+  quien.addEventListener('change', () => paga.bloquearCompanero(quien.value === 'nose'));
+  pintar(resumenGuardia(g), el('div', { class: 'tarjeta' },
+    el('label', { htmlFor: 'mc-quien' }, '¿Quién te cubre?'), quien,
+    el('label', null, '¿Quién paga?'), paga.nodo, el('br'),
+    el('button', { class: 'grande', onclick: accion(async () => {
+      if (!quien.value) throw new Error('Elegí quién te cubre.');
+      const r = await llamar('meCubre', g.id, paga.valor(), quien.value === 'nose' ? '' : quien.value);
+      aviso = { texto: quien.value === 'nose' ? 'Queda pendiente hasta que alguien cargue la guardia.' : 'Le pedimos a ' + quien.selectedOptions[0].textContent + ' que confirme.', deshacer: r.id };
+      ir('mes');
+    }) }, 'Guardar')),
+    el('button', { class: 'grande sec', onclick: () => irConfirmar(g.id) }, 'Volver'));
+}
+function pintarEditar(g) {
+  vista = 'guardia';
+  pintarNav();
+  const fecha = el('input', { id: 'e-fecha', type: 'date', value: g.fecha });
+  const turno = el('select', { id: 'e-turno' }, datos.turnos.map((t) => el('option', { value: t.id, selected: t.id === g.turno }, t.nombre)));
+  const tipo = el('select', { id: 'e-tipo' }, g.tipos_posibles.map((t) => el('option', { value: t, selected: t === g.tipo }, TIPOS[t])));
+  const otro = g.titular && g.hizo && g.titular !== g.hizo;
+  pintar(el('h2', null, 'Editar guardia'), resumenGuardia(g),
+    otro ? el('div', { class: 'regla' }, 'Si la cambiás, ' + (g.es_titular ? g.hizo : g.titular) + ' tiene que volver a confirmar.') : null,
+    el('div', { class: 'tarjeta' }, el('label', { htmlFor: 'e-fecha' }, 'Fecha'), fecha, el('label', { htmlFor: 'e-turno' }, 'Turno'), turno,
+      el('label', { htmlFor: 'e-tipo' }, '¿Quién paga?'), tipo, el('br'),
+      el('button', { class: 'grande', onclick: accion(async () => {
+        await llamar('editarGuardia', g.id, { fecha: fecha.value, turno: turno.value, tipo: tipo.value });
+        aviso = { texto: 'Guardia modificada.' };
+        ir('mes');
+      }) }, 'Guardar cambios')),
+    el('button', { class: 'grande sec', onclick: () => ir('mes') }, 'Volver'));
+}
+
+// --- Médico: + Cargar guardia ---
+async function verCargar(fechaInicial, comoReclamo) {
+  vista = 'cargar';
+  pintarNav();
+  cargando();
+  const fecha = el('input', { id: 'c-fecha', type: 'date', value: fechaInicial });
+  const titular = el('select', { id: 'c-titular' });
+  const estadoCarga = el('div', { class: 'tarjeta destacado', id: 'c-cat' });
+  const zona = el('div');
+  const tarjetaZona = el('div', { class: 'tarjeta' }, zona);
+  const avisoCerrado = el('div');
+  const errorCarga = el('div', { class: 'error', role: 'alert', hidden: true });
+  let turnoElegido = '24H';
+  const botonesTurno = datos.turnos.map((t) => {
+    const b = el('button', { type: 'button', 'data-turno': t.id }, { '24H': '24 h', '12H_DIA': '12 h día', '12H_NOCHE': '12 h noche' }[t.id] || t.nombre);
+    b.addEventListener('click', () => { turnoElegido = t.id; marcarTurno(); refrescar(); });
+    return b;
+  });
+  const marcarTurno = () => botonesTurno.forEach((b) => b.setAttribute('aria-pressed', b.dataset.turno === turnoElegido));
+  marcarTurno();
+  const paga = selectorPaga('REEMPLAZO_HOSPITAL');
+  let reclamo = !!comoReclamo;
+  let lista = [];
+  const alElegir = () => {
+    const c = lista.find((x) => x.id === titular.value);
+    paga.bloquearCompanero(!titular.value);
+    paga.poner(c ? c.sugerido : 'REEMPLAZO_HOSPITAL');
+  };
+  titular.addEventListener('change', alElegir);
+  async function refrescar() {
+    if (!fecha.value) return;
+    let r;
+    try { r = await llamar('candidatos', fecha.value, turnoElegido); } catch (e) { estadoCarga.textContent = e.message; return; }
+    lista = r.candidatos;
+    const previo = titular.value;
+    const prevista = lista.filter((x) => x.prevista);
+    const resto = lista.filter((x) => !x.prevista);
+    const op = (x) => el('option', { value: x.id }, x.nombre);
+    titular.replaceChildren(
+      prevista.length ? el('optgroup', { label: 'Con guardia ese día y turno' }, prevista.map(op)) : '',
+      el('optgroup', { label: prevista.length ? 'El resto' : 'Médicos' }, resto.map(op)),
+      el('option', { value: '' }, 'Puesto vacante / nadie'));
+    titular.value = lista.some((x) => x.id === previo) ? previo : (prevista.length ? prevista[0].id : '');
+    alElegir();
+    estadoCarga.textContent = 'Se registra como ' + r.categoria + (r.anticipable ? ' · se confirma por adelantado' : r.futura ? ' · queda prevista y te avisamos ese día' : '');
+    const bloqueado = r.cerrado && !reclamo;
+    tarjetaZona.hidden = bloqueado;
+    avisoCerrado.replaceChildren(...(r.cerrado ? (reclamo
+      ? [el('div', { class: 'regla' }, 'Se carga como "reclamo mes anterior": se cobra con el mes actual.')]
+      : [el('div', { class: 'error' }, r.mensaje_cerrado), el('button', { class: 'grande', onclick: () => { reclamo = true; refrescar(); } }, 'Cargar como reclamo')]) : []));
+  }
+  fecha.addEventListener('change', refrescar);
+  zona.append(
+    el('label', null, 'Turno'), el('div', { class: 'opciones' }, botonesTurno),
+    el('label', { htmlFor: 'c-titular' }, '¿A quién cubriste?'), titular,
+    el('label', null, '¿Quién paga?'), paga.nodo, el('br'),
+    errorCarga,
+    el('button', { class: 'grande', id: 'c-guardar', onclick: async (ev) => {
+      const b = ev.currentTarget;
+      b.disabled = true;
+      errorCarga.hidden = true;
+      try {
+        const g = await llamar('cargarGuardia', { fecha: fecha.value, turno: turnoElegido, titular_id: titular.value, tipo: paga.valor(), reclamo: reclamo });
+        const texto = g.estado === 'CONFIRMADA' ? 'Guardia confirmada.' : g.estado === 'CONFIRMADA_ANTICIPADA' ? 'Confirmada por adelantado.'
+          : g.estado === 'PREVISTA' ? 'Quedó prevista. Te avisamos ese día.' + (g.titular ? ' Le pedimos a ' + g.titular + ' que confirme.' : '')
+            : 'Cargada. Falta que confirme ' + g.titular + '.';
+        aviso = { texto: texto, deshacer: g.deshacer_min ? g.id : null };
+        ir('mes');
+      } catch (e) {
+        errorCarga.textContent = e.message;
+        errorCarga.hidden = false;
+        b.disabled = false;
+      }
+    } }, 'Guardar'));
+  pintar(bloqueAviso(), el('h2', null, 'Cargar guardia del ' + fechaLinda(fechaInicial)),
+    el('label', { htmlFor: 'c-fecha' }, 'Fecha'), fecha, el('br'), el('br'), estadoCarga, avisoCerrado, tarjetaZona,
+    el('button', { class: 'grande sec', onclick: () => ir('mes') }, 'Volver'));
+  await refrescar();
+}
+
+// --- Médico: Vacaciones ---
+async function verVacaciones() {
+  cargando();
+  let lista;
+  try { lista = await llamar('vacaciones'); } catch (e) { return mostrarError(e); }
+  const desde = el('input', { id: 'v-desde', type: 'date' });
+  const hasta = el('input', { id: 'v-hasta', type: 'date' });
+  const tipo = el('select', { id: 'v-tipo' }, el('option', { value: 'vacaciones' }, 'Vacaciones'), el('option', { value: 'licencia' }, 'Licencia'));
+  let editando = null;
+  const boton = el('button', { class: 'grande', type: 'submit' }, 'Guardar');
+  const form = el('form', { class: 'tarjeta', onsubmit: async (ev) => {
+    ev.preventDefault();
+    boton.disabled = true;
+    const datosV = { desde: desde.value, hasta: hasta.value, tipo: tipo.value };
+    try {
+      if (editando) await llamar('editarVacaciones', editando, datosV); else await llamar('agregarVacaciones', datosV);
+      aviso = { texto: 'Guardado. Tus guardias de esas fechas se recalcularon.' };
+    } catch (e) { aviso = { texto: e.message, error: true }; }
+    verVacaciones();
+  } }, el('label', { htmlFor: 'v-desde' }, 'Desde'), desde, el('label', { htmlFor: 'v-hasta' }, 'Hasta'), hasta, el('label', { htmlFor: 'v-tipo' }, 'Tipo'), tipo, el('br'), boton);
+  pintar(bloqueAviso(), el('h2', null, 'Mis vacaciones'), form,
+    el('div', { class: 'tarjeta' }, lista.length ? lista.map((v) => el('div', { class: 'fila' },
+      el('span', null, fechaLinda(v.desde) + ' a ' + fechaLinda(v.hasta) + ' (' + v.tipo + ')'),
+      v.cerrado ? el('span', { class: 'suave' }, 'Mes cerrado') : el('span', null,
+        el('button', { class: 'chico', onclick: () => { editando = v.id; desde.value = v.desde; hasta.value = v.hasta; tipo.value = v.tipo; boton.textContent = 'Guardar cambios'; window.scrollTo(0, 0); } }, 'Cambiar'),
+        el('button', { class: 'chico', onclick: accion(async () => { await llamar('cancelarVacaciones', v.id); aviso = { texto: 'Vacaciones canceladas.' }; verVacaciones(); }) }, 'Cancelar')))) : el('span', { class: 'suave' }, 'No cargaste vacaciones.')));
+}
+
+// --- Médico: Deudas ---
+async function verDeudas() {
+  cargando();
+  let d;
+  try { d = await llamar('deudas'); } catch (e) { return mostrarError(e); }
+  const pend = (x) => x.estado === 'pendiente';
+  pintar(bloqueAviso(), el('h2', null, 'Deudas entre compañeros'),
+    el('h3', null, 'Lo que debo'),
+    el('div', { class: 'tarjeta' }, d.debo.filter(pend).length ? d.debo.filter(pend).map((x) => el('div', { class: 'fila' }, el('span', null, 'A ' + x.acreedor + ': guardia del ' + fechaLinda(x.fecha) + ' (' + x.turno + '). Pagar el ' + fechaLinda(x.pago) + '.'))) : el('span', { class: 'suave' }, 'No debés nada.')),
+    el('h3', null, 'Lo que me deben'),
+    el('div', { class: 'tarjeta' }, d.me_deben.filter(pend).length ? d.me_deben.filter(pend).map((x) => el('div', null,
+      el('p', { style: 'margin:0 0 8px' }, x.deudor + ': guardia del ' + fechaLinda(x.fecha) + ' (' + x.turno + '). Cobra el ' + fechaLinda(x.pago) + '.'),
+      el('button', { class: 'grande', onclick: accion(async () => { await llamar('recibiPago', x.id); aviso = { texto: 'Pago anotado.' }; verDeudas(); }) }, 'Recibí el pago'))) : el('span', { class: 'suave' }, 'No te deben nada.')),
+    d.me_deben.filter((x) => x.puede_deshacer).map((x) => el('div', { class: 'ok' }, 'Pago de ' + x.deudor + ' anotado. ',
+      el('button', { class: 'chico', onclick: accion(async () => { await llamar('deshacerPago', x.id); aviso = { texto: 'Deshecho.' }; verDeudas(); }) }, 'Deshacer'))));
+}
+
+// --- Médico: Guardia fija ---
+const selDia = (dias, v) => el('select', null, dias.map((d) => el('option', { value: d, selected: d === v }, d.charAt(0).toUpperCase() + d.slice(1))));
+function editorFija(filas, dias, turnos) {
+  const contenedor = el('div');
+  const pintarFilas = () => {
+    contenedor.replaceChildren(...filas.map((f, i) => {
+      const dia = selDia(dias, f.dia_semana);
+      dia.addEventListener('change', () => { f.dia_semana = dia.value; });
+      const turno = el('select', null, turnos.map((t) => el('option', { value: t.id, selected: t.id === f.turno }, t.nombre)));
+      turno.addEventListener('change', () => { f.turno = turno.value; });
+      const tipo = el('select', null, el('option', { value: 'CONTRATO', selected: f.tipo !== 'REEMPLAZO_HOSPITAL' }, 'Contrato'), el('option', { value: 'REEMPLAZO_HOSPITAL', selected: f.tipo === 'REEMPLAZO_HOSPITAL' }, 'Reemplazo fijo (paga el hospital)'));
+      tipo.addEventListener('change', () => { f.tipo = tipo.value; });
+      return el('div', { style: 'border-top:1px solid #edf0f4;padding:8px 0' }, dia, el('br'), el('br'), turno, el('br'), el('br'), tipo, el('br'), el('br'),
+        el('button', { class: 'chico', onclick: () => { filas.splice(i, 1); pintarFilas(); } }, 'Quitar'));
+    }));
+  };
+  pintarFilas();
+  return el('div', null, contenedor,
+    el('button', { class: 'chico', onclick: () => { filas.push({ dia_semana: 'lunes', turno: '24H', tipo: 'CONTRATO' }); pintarFilas(); } }, '+ Agregar guardia'));
+}
+async function verContrato() {
+  cargando();
+  let c;
+  try { c = await llamar('contrato'); } catch (e) { return mostrarError(e); }
+  const filas = c.filas.map((f) => Object.assign({}, f));
+  pintar(bloqueAviso(), el('h2', null, 'Mi guardia fija'),
+    el('div', { class: 'tarjeta' },
+      el('p', { class: 'suave', style: 'margin-top:0' }, 'Contrato: 24 h por semana (24 h un día, o 12 h + 12 h). Los reemplazos fijos se piden y se confirman cada día como cualquier guardia.'),
+      editorFija(filas, c.dias, c.turnos), el('br'), el('br'),
+      el('button', { class: 'grande', onclick: accion(async () => { await llamar('guardarMiFija', filas); aviso = { texto: 'Guardia fija guardada.' }; verContrato(); }) }, 'Guardar')),
+    datos.yo.telegram ? el('div', { class: 'ok' }, 'Telegram vinculado.') : datos.yo.enlace_telegram ? el('a', { class: 'grande', href: datos.yo.enlace_telegram, target: '_blank', rel: 'noopener' }, 'Vincular Telegram') : null,
+    bloquePin());
+}
+function bloquePin() {
+  const a = el('input', { type: 'password', inputMode: 'numeric', maxLength: 4, placeholder: 'PIN actual', 'aria-label': 'PIN actual' });
+  const n = el('input', { type: 'password', inputMode: 'numeric', maxLength: 4, placeholder: 'PIN nuevo', 'aria-label': 'PIN nuevo' });
+  return el('div', { class: 'tarjeta' }, el('h3', { style: 'margin-top:0' }, 'Cambiar mi PIN'), a, el('br'), el('br'), n, el('br'), el('br'),
+    el('button', { class: 'grande sec', onclick: accion(async () => {
+      const r = await llamar('cambiarMiPin', a.value, n.value);
+      token = r.token; escribir(token); aviso = { texto: 'PIN cambiado.' }; verContrato();
+    }) }, 'Cambiar PIN'));
+}
+
+// --- Jefe: Tablero ---
+async function verTablero() {
+  cargando();
+  let d;
+  try { d = await llamar('tablero', mesActual); } catch (e) { return mostrarError(e); }
+  const tabla = el('table', { class: 'grilla' },
+    el('thead', null, el('tr', null, el('th', null, 'Médico'), d.dias.map((x) => el('th', { class: x.no_habil ? 'nh' : '' }, Number(x.fecha.slice(8)))))),
+    el('tbody', null, d.medicos.map((m) => el('tr', null, el('td', null, m.nombre), d.dias.map((x) => {
+      const c = m.celdas[x.fecha];
+      return c ? el('td', { class: 'c-' + c.color, style: 'cursor:pointer', onclick: () => verEditarJefe(c.id) }, c.texto) : el('td');
+    })))));
+  pintar(bloqueAviso(), navMes(d.titulo, verTablero), el('div', { class: 'suave', style: 'margin-bottom:8px' }, 'Estado del mes: ' + d.estado + '. Tocá una guardia para editarla.'),
+    el('div', { class: 'scroll' }, tabla),
+    el('div', { class: 'leyenda' }, [['conflicto', 'Conflicto'], ['espera', 'Pendiente'], ['prevista', 'Prevista'], ['confirmada', 'Contrato'], ['reemplazo', 'Reemplazo'], ['cubierta', 'Cobertura']].map(([c, t]) => el('span', { class: 'c-' + c }, t))));
+}
+
+// --- Jefe: editar cualquier guardia ---
+async function verEditarJefe(id) {
+  cargando();
+  let g;
+  try { g = await llamar('guardiaJefe', id); } catch (e) { return mostrarError(e); }
+  const fecha = el('input', { type: 'date', value: g.fecha, 'aria-label': 'Fecha' });
+  const turno = el('select', { 'aria-label': 'Turno' }, g.turnos.map((t) => el('option', { value: t.id, selected: t.id === g.turno }, t.nombre)));
+  const tipo = el('select', { 'aria-label': 'Tipo' }, Object.entries(TIPOS).map(([k, t]) => el('option', { value: k, selected: k === g.tipo }, t)));
+  const hizo = el('select', { 'aria-label': 'Quién la hizo' }, el('option', { value: '' }, 'Sin asignar'), g.medicos.map((m) => el('option', { value: m.id, selected: m.id === g.hizo_id }, m.nombre)));
+  const volver = vista;
+  const hacer = (ac, val) => accion(async () => {
+    const r = await llamar('corregirGuardia', g.id, ac, val);
+    aviso = { texto: r.corregidos.length ? 'Corregido. Se regeneró el Excel y salió el mail "CORREGIDO".' : 'Corregido.' };
+    ir(volver);
+  });
+  pintar(el('h2', null, 'Editar guardia'),
+    el('div', { class: 'suave' }, (ESTADOS[g.estado] || g.estado) + (g.titular ? ' · titular ' + g.titular : '')),
+    g.entregado ? el('div', { class: 'regla' }, 'El Excel de este mes ya salió: si la cambiás, se regenera y llega de nuevo como "CORREGIDO".') : null,
+    el('div', { class: 'tarjeta' }, el('label', null, 'Fecha'), fecha, el('label', null, 'Turno'), turno, el('label', null, 'Tipo'), tipo, el('label', null, 'Quién la hizo'), hizo, el('br'),
+      el('button', { class: 'grande', onclick: accion(async () => {
+        const r = await llamar('corregirGuardia', g.id, 'editar', { fecha: fecha.value, turno: turno.value, tipo: tipo.value, hizo: hizo.value });
+        aviso = { texto: r.corregidos.length ? 'Corregido. Se regeneró el Excel y salió el mail "CORREGIDO".' : 'Corregido.' };
+        ir(volver);
+      }) }, 'Guardar cambios')),
+    el('button', { class: 'grande sec', onclick: hacer('confirmar') }, 'Confirmar'),
+    el('button', { class: 'grande sec', onclick: hacer('desmarcar') }, 'Desmarcar'),
+    el('button', { class: 'grande peligro', onclick: hacer('anular') }, 'Anular'),
+    el('button', { class: 'grande sec', onclick: () => ir(volver) }, 'Volver'));
+}
+
+// --- Jefe: Conflictos ---
+async function verConflictos() {
+  cargando();
+  let d;
+  try { d = await llamar('conflictos', mesActual); } catch (e) { return mostrarError(e); }
+  const tarjetas = d.conflictos.map((c) => el('div', { class: 'tarjeta' }, el('b', null, c.texto),
+    el('div', { style: 'margin-top:8px' }, c.guardias.map((g) => el('button', { class: 'chico', onclick: () => verEditarJefe(g.id) }, 'Editar ' + fechaLinda(g.fecha))))));
+  pintar(bloqueAviso(), navMes(d.titulo, verConflictos),
+    el('div', { class: 'suave', style: 'margin-bottom:8px' }, 'Solo para mirar: los médicos los resuelven entre ellos.'),
+    d.conflictos.length ? tarjetas : el('div', { class: 'ok' }, 'No hay conflictos este mes.'));
+}
+
+// --- Jefe: Excel ---
+function descargar(r) {
+  const bin = atob(r.base64);
+  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  const a = el('a', { href: url, download: r.nombre });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+async function verExcel() {
+  cargando();
+  let d;
+  try { d = await llamar('vistaExcel', mesActual); } catch (e) { return mostrarError(e); }
+  const celda = (t, cl, extra) => el('td', Object.assign({ class: cl }, extra), t);
+  const filas = d.filas.map((f) => el('tr', null, el('td', null, fechaLinda(f.fecha)), el('td', null, f.nombre), el('td'),
+    ['D', 'E', 'F', 'G'].map((c) => el('td', null, c === f.columna ? 'X' : '')),
+    el('td', { style: 'border:none' }, el('button', { class: 'chico', style: 'margin:0', onclick: () => verEditarJefe(f.guardia_id) }, 'Editar'))));
+  pintar(bloqueAviso(), navMes(d.titulo_mes, verExcel),
+    el('div', { class: 'tarjeta' }, el('div', { class: 'destacado' }, d.filas.length + (d.filas.length === 1 ? ' reemplazo' : ' reemplazos')),
+      el('div', { class: 'suave' }, 'Estado: ' + d.estado + ' · Archivo: ' + d.archivo),
+      el('div', { class: 'suave' }, 'Sale solo el ' + fechaLinda(d.corte) + ' a las 08:00. No hace falta aprobar nada.'),
+      el('div', { class: 'suave' }, 'Se cobran el ' + d.cobro),
+      d.archivo_url ? el('a', { href: d.archivo_url, target: '_blank', rel: 'noopener' }, 'Abrir el Excel en Drive') : null),
+    el('div', { class: 'regla' }, el('b', null, 'Para mirar: '), d.para_mirar.length ? el('ul', { style: 'margin:6px 0;padding-left:18px' }, d.para_mirar.map((l) => el('li', null, l))) : 'Sin observaciones.'),
+    el('div', { class: 'scroll' }, el('table', { class: 'rrhh' },
+      el('tr', null, celda('', 't1'), celda('', 't1'), celda(d.titulo, 't1', { colSpan: 5 })),
+      el('tr', null, celda('', 't2'), celda('', 't2'), celda('', 't2'), celda('HABILES', 't2'), celda('', 't2'), celda('NO HABILES', 't2'), celda('', 't2')),
+      el('tr', null, ['FECHA', 'NOMBRE Y APELLIDO', '', '12 HS', '24 HS', '12 HS', '24 HS'].map((t) => celda(t, 't2'))),
+      filas)),
+    el('br'),
+    el('button', { class: 'grande sec', onclick: accion(async () => { descargar(await llamar('descargarExcel', d.mes)); verExcel(); }) }, 'Descargar este mes'),
+    el('button', { class: 'grande sec', onclick: accion(async () => { descargar(await llamar('descargarAcumulado')); verExcel(); }) }, 'Descargar acumulado (una pestaña por mes)'));
+}
+
+// --- Jefe: Médicos ---
+async function verMedicos() {
+  cargando();
+  let d;
+  try { d = await llamar('medicos'); } catch (e) { return mostrarError(e); }
+  const nombre = el('input', { placeholder: 'NOMBRE APELLIDO (como va a RRHH)', 'aria-label': 'Nombre y apellido', id: 'm-nombre' });
+  const email = el('input', { type: 'email', placeholder: 'Mail', 'aria-label': 'Mail', id: 'm-email' });
+  const pin = el('input', { inputMode: 'numeric', maxLength: 4, placeholder: 'PIN de 4 números', 'aria-label': 'PIN', id: 'm-pin' });
+  pintar(bloqueAviso(), el('h2', null, 'Médicos'),
+    el('div', { class: 'tarjeta' }, el('h3', { style: 'margin-top:0' }, 'Agregar médico'), nombre, el('br'), el('br'), email, el('br'), el('br'), pin, el('br'), el('br'),
+      el('button', { class: 'grande', onclick: accion(async () => { await llamar('guardarMedico', { nombre: nombre.value, email: email.value, pin: pin.value }); aviso = { texto: 'Médico agregado.' }; verMedicos(); }) }, 'Agregar')),
+    d.medicos.map((m) => tarjetaMedico(m, d)));
+}
+function tarjetaMedico(m, d) {
+  const email = el('input', { type: 'email', value: m.email, placeholder: 'Mail', 'aria-label': 'Mail de ' + m.nombre });
+  const nombre = el('input', { value: m.nombre, 'aria-label': 'Nombre de ' + m.nombre });
+  const pin = el('input', { inputMode: 'numeric', maxLength: 4, placeholder: 'PIN nuevo (dejar vacío para no cambiar)', 'aria-label': 'PIN nuevo de ' + m.nombre });
+  const activo = el('input', { type: 'checkbox', checked: m.activo });
+  const admin = el('input', { type: 'checkbox', checked: m.admin });
+  const filas = m.fijas.map((f) => Object.assign({}, f));
+  return el('details', { class: 'tarjeta' },
+    el('summary', null, el('b', null, m.nombre), m.baja ? ' (baja)' : m.activo ? '' : ' (inactivo)', m.admin ? ' · administrador' : '', m.telegram ? ' · Telegram' : ''),
+    el('label', null, 'Nombre (como va a RRHH)'), nombre, el('label', null, 'Mail'), email, el('label', null, 'PIN'), pin,
+    m.pin_pendiente ? el('div', { class: 'suave' }, 'Todavía no entró por primera vez.') : null,
+    el('label', null, activo, ' Activo'), el('label', null, admin, ' Administrador'), el('br'),
+    el('button', { class: 'grande', onclick: accion(async () => { await llamar('guardarMedico', { id: m.id, nombre: nombre.value, email: email.value, pin: pin.value, activo: activo.checked, admin: admin.checked }); aviso = { texto: 'Guardado.' }; verMedicos(); }) }, 'Guardar datos'),
+    el('h3', null, 'Guardia fija'), editorFija(filas, d.dias, d.turnos),
+    el('br'), el('br'),
+    el('button', { class: 'grande sec', onclick: accion(async () => { await llamar('guardarFijaDe', m.id, filas); aviso = { texto: 'Guardia fija guardada.' }; verMedicos(); }) }, 'Guardar guardia fija'));
+}
+
+// --- Jefe: Feriados y configuración ---
+async function verAjustes() {
+  cargando();
+  let d;
+  try { d = await llamar('ajustes'); } catch (e) { return mostrarError(e); }
+  const fecha = el('input', { type: 'date', 'aria-label': 'Fecha del feriado' });
+  const nombre = el('input', { placeholder: 'Nombre del feriado', 'aria-label': 'Nombre del feriado' });
+  const tipo = el('select', { 'aria-label': 'Tipo de feriado' }, ['inamovible', 'trasladable', 'no laborable'].map((t) => el('option', { value: t }, t)));
+  const guardar = (c, input) => accion(async () => { await llamar('guardarConfig', c.clave, input.value); aviso = { texto: 'Guardado.' }; verAjustes(); });
+  pintar(bloqueAviso(), el('h2', null, 'Configuración'),
+    el('div', { class: 'tarjeta' }, d.config.map((c) => {
+      const input = el('input', { value: c.valor, 'aria-label': c.clave });
+      return el('div', { style: 'margin-bottom:14px' }, el('label', null, c.clave), el('div', { class: 'suave' }, c.ayuda), input, el('button', { class: 'chico', style: 'margin-top:6px', onclick: guardar(c, input) }, 'Guardar'));
+    })),
+    el('h2', null, 'Feriados'),
+    el('div', { class: 'tarjeta' }, fecha, el('br'), el('br'), nombre, el('br'), el('br'), tipo, el('br'), el('br'),
+      el('button', { class: 'grande', onclick: accion(async () => { await llamar('guardarFeriado', { fecha: fecha.value, nombre: nombre.value, tipo: tipo.value }); aviso = { texto: 'Feriado guardado.' }; verAjustes(); }) }, 'Agregar feriado')),
+    el('div', { class: 'tarjeta' }, d.feriados.map((f) => el('div', { class: 'fila' }, el('span', null, fechaLinda(f.fecha) + ' · ' + f.nombre),
+      el('button', { class: 'chico', onclick: accion(async () => { await llamar('borrarFeriado', f.fecha); aviso = { texto: 'Feriado borrado.' }; verAjustes(); }) }, 'Borrar')))));
+}
+
+arrancar();
+</script>
+</body>
+</html>

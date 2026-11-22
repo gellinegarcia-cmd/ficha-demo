@@ -142,6 +142,7 @@ function instalar() {
   crearHojas_();
   cargarDatosIniciales_();
   cargarMedicosPrueba_();
+  prepararRegistroPropio_(); // una sola vez: cada médico carga su guardia fija en el registro
   instalarTriggers_();
   registrar_(quien, 'instalar', '');
   SpreadsheetApp.getUi().alert('Listo. Se crearon las hojas y se activaron los automatismos.\n\n' +

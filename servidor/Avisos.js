@@ -67,6 +67,14 @@ function botonesConfirmar_(g) {
   ];
 }
 
+// Médico de reemplazos: nadie lo cubre. Si no lo hace, lo anula desde la app.
+function botonesReemplazoSolo_(g) {
+  return [
+    [{ texto: 'La hago yo', data: 'H:' + g.id, vista: 'confirmar', g: g.id, textoMail: 'Responder en la app' }],
+    [{ texto: 'No la hago (abrir la app)', vista: 'confirmar', g: g.id }]
+  ];
+}
+
 function botonesSiNo_(g) {
   return [[
     { texto: 'Sí', data: 'S:' + g.id, vista: 'confirmar', g: g.id, textoMail: 'Responder en la app' },

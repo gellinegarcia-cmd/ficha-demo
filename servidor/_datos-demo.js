@@ -1,5 +1,6 @@
 // Datos de ejemplo de la demo: noviembre 2026, médicos inventados. Todos con PIN 1111.
-// JAVIER GARCIA es el administrador ("jefe"). PAULA RIOS todavía no confirmó su guardia de contrato.
+// JAVIER GARCIA es el administrador ("jefe"). PAULA RIOS todavía no hizo el registro (se ve el flujo completo).
+// SOFIA LUNA ya se registró como SOLO_REEMPLAZO, con un reemplazo fijo semanal.
 // Corre dentro de servidor.html, después de simulador.js y de los archivos de src/.
 (function (w) {
   'use strict';
@@ -9,19 +10,22 @@
   crearHojas_();
   cargarDatosIniciales_();
   setPropiedad_('TELEGRAM_TOKEN', 'DEMO');
+  setPropiedad_('TELEGRAM_BOT', 'guardias_upa_demo_bot'); // en la demo, "Vincular Telegram" se simula
 
   const M = {};
   let chat = 1000;
   const alta = (clave, nombre, extra) => {
     reiniciarEstado_();
-    M[clave] = insertar_('MEDICOS', Object.assign({ id: siguienteId_('MEDICOS'), nombre_apellido: nombre, pin: '1111', email: '', telegram_chat_id: String(chat++), activo: true, es_admin: false, contrato_revisado: true }, extra || {}));
+    M[clave] = insertar_('MEDICOS', Object.assign({ id: siguienteId_('MEDICOS'), nombre_apellido: nombre, pin: '1111', email: '', telegram_chat_id: String(chat++),
+      activo: true, es_admin: false, contrato_revisado: true, pin_propio: true, vinculo: 'CONTRATO' }, extra || {}));
   };
   alta('javier', 'JAVIER GARCIA', { es_admin: true });
   alta('martin', 'MARTIN SOSA');
   alta('laura', 'LAURA BENITEZ');
   alta('diego', 'DIEGO FERREYRA');
   alta('nico', 'NICOLAS QUIROGA');
-  alta('paula', 'PAULA RIOS', { contrato_revisado: false });
+  alta('paula', 'PAULA RIOS', { contrato_revisado: false, pin_propio: false, vinculo: '', telegram_chat_id: '' });
+  alta('sofia', 'SOFIA LUNA', { vinculo: 'SOLO_REEMPLAZO' });
 
   const fija = (k, d, t, tipo) => insertar_('GUARDIA_FIJA', { medico_id: M[k].id, dia_semana: d, turno: t, tipo: tipo || 'CONTRATO', vigente: true });
   fija('javier', 'jueves', '24H');
@@ -31,7 +35,7 @@
   fija('laura', 'sabado', '12H_DIA', 'REEMPLAZO_HOSPITAL');
   fija('diego', 'viernes', '24H');
   fija('nico', 'lunes', '12H_NOCHE');
-  fija('paula', 'domingo', '24H');
+  fija('sofia', 'sabado', '12H_NOCHE', 'REEMPLAZO_HOSPITAL');
   abrirMes_('2026-11');
 
   const med = (k) => buscarPorId_('MEDICOS', M[k].id);
@@ -53,6 +57,10 @@
   hagoYo_(med('diego'), guardia('2026-11-06', 'diego').id);
   hagoYo_(med('diego'), guardia('2026-11-13', 'diego').id);
   meCubre_(med('diego'), guardia('2026-11-20', 'diego').id, 'REEMPLAZO_HOSPITAL', M.nico.id);
+  hagoYo_(med('sofia'), guardia('2026-11-07', 'sofia').id);
+  hagoYo_(med('sofia'), guardia('2026-11-14', 'sofia').id);
+  cargarGuardia_(med('sofia'), { fecha: '2026-11-17', turno: '24H', titular_id: M.martin.id, tipo: 'COBERTURA_COMPANERO' });
+  responderCobertura_(med('martin'), guardia('2026-11-17', 'martin').id, true);
   refrescarMesesSucios_();
 
   // Lo que se hace en la demo se guarda solo en esta pestaña y se repite al recargar la página.
@@ -60,7 +68,16 @@
   const PERMITIDAS = ['api', 'login', 'medicosPublico'];
   let llamadas = [];
   try { llamadas = JSON.parse(sessionStorage.getItem(CLAVE) || '[]'); } catch (e) { llamadas = []; }
-  llamadas.forEach((c) => { try { w[c.f].apply(null, c.args); } catch (e) { /* lo mismo que la primera vez */ } });
+  // "Vincular Telegram": en la demo no hay bot; se simula el /start que mandaría Telegram.
+  const vincular = (codigo) => { reiniciarEstado_(); vincularChat_(String(9000 + Number(String(codigo).split('-')[0])), String(codigo)); };
+  llamadas.forEach((c) => {
+    try { if (c.f === '__vincular') vincular(c.args[0]); else w[c.f].apply(null, c.args); } catch (e) { /* lo mismo que la primera vez */ }
+  });
+  w.demoVincularTelegram = function (codigo) {
+    vincular(codigo);
+    llamadas.push({ f: '__vincular', args: [String(codigo)] });
+    try { sessionStorage.setItem(CLAVE, JSON.stringify(llamadas)); } catch (e) { /* sin guardar */ }
+  };
 
   w.demoLlamar = function (f, args) {
     if (!PERMITIDAS.includes(f)) throw new Error('No permitido en la demo: ' + f);

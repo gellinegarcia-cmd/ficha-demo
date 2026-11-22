@@ -87,7 +87,11 @@ function login(id, pin) {
 // Métodos disponibles desde las pantallas. "e" indica que escribe (usa el bloqueo).
 function tablaApi_() {
   return {
-    inicio: { f: apiInicio_ },
+    inicio: { registro: 1, f: apiInicio_ },
+    registroPin: { registro: 1, e: 1, f: function (m, a) { return crearPinPropio_(m, a[0]); } },
+    registroGuardar: { registro: 1, e: 1, f: function (m, a) { if (!tienePinPropio_(m)) throw new ErrorUsuario('Primero creá tu PIN.'); return guardarBorrador_(m, a[0]); } },
+    registroResumen: { registro: 1, f: function (m) { return { resumen: resumenRegistro_(m, limpiarBorrador_(borradorDe_(m))), telegram: !!m.telegram_chat_id }; } },
+    registroConfirmar: { registro: 1, e: 1, f: function (m) { return confirmarRegistro_(m); } },
     miMes: { f: apiMiMes_ },
     guardia: { f: apiGuardia_ },
     hagoYo: { e: 1, f: function (m, a) { return vistaGuardia_(hagoYo_(m, a[0]), m); } },
@@ -109,7 +113,8 @@ function tablaApi_() {
     deshacerPago: { e: 1, f: function (m, a) { deshacerPago_(m, a[0]); return apiDeudas_(m); } },
     contrato: { f: apiContrato_ },
     guardarMiFija: { e: 1, f: function (m, a) { guardarFija_(m.id, a[0]); confirmarContrato_(m); registrar_(m.nombre_apellido, 'guardar_fija', ''); return apiContrato_(m); } },
-    confirmarContrato: { e: 1, f: function (m) { confirmarContrato_(m); return { ok: true }; } },
+    cambiarMiVinculo: { e: 1, f: function (m, a) { cambiarVinculo_(m, a[0]); return apiContrato_(m); } },
+    guardarMiEmail: { e: 1, f: function (m, a) { guardarMiEmail_(m, a[0]); return apiContrato_(m); } },
     cambiarMiPin: { e: 1, f: function (m, a) { return apiCambiarMiPin_(m, a[0], a[1]); } },
 
     // El jefe tiene acceso de administrador por si quiere editar. El sistema nunca se lo pide.
@@ -139,6 +144,7 @@ function api(token, metodo, args) {
     const tabla = tablaApi_();
     if (!Object.prototype.hasOwnProperty.call(tabla, metodo)) return { ok: false, error: 'Acción desconocida.' };
     const def = tabla[metodo];
+    if ((!tienePinPropio_(m) || !registroCompleto_(m)) && !def.registro) return { ok: false, registro: true, error: 'Primero completá tu registro.' };
     if (def.admin && !esSi_(m.es_admin)) return { ok: false, error: 'Solo el jefe puede hacer esto.' };
     const a = Array.isArray(args) ? args : [];
     const datos = def.e ? conLock_(function () { return def.f(m, a); }) : def.f(m, a);
@@ -153,9 +159,12 @@ function api(token, metodo, args) {
 function apiInicio_(m) {
   const hoyStr = hoy_();
   return {
-    yo: { id: m.id, nombre: m.nombre_apellido, admin: esSi_(m.es_admin), telegram: !!m.telegram_chat_id, enlace_telegram: m.telegram_chat_id ? '' : enlaceVinculo_(m.id) },
+    yo: { id: m.id, nombre: m.nombre_apellido, admin: esSi_(m.es_admin), telegram: !!m.telegram_chat_id, enlace_telegram: m.telegram_chat_id ? '' : enlaceVinculo_(m.id),
+      vinculo: vinculoDe_(m), email: m.email || '' },
     hoy: hoyStr,
-    revisar_contrato: !esSi_(m.contrato_revisado),
+    registro: tienePinPropio_(m) && registroCompleto_(m) ? null : estadoRegistro_(m),
+    recordar_avisos: registroCompleto_(m) && !m.telegram_chat_id && !m.email,
+    dias: DIAS.slice(1).concat(DIAS[0]),
     fijas: fijasVigentes_().filter(function (f) { return f.medico_id === m.id; }).map(function (f) {
       return { dia_semana: normalizarDia_(f.dia_semana), turno: TURNOS[f.turno] ? TURNOS[f.turno].nombre : f.turno, tipo: f.tipo || TIPO.CONTRATO };
     }),
@@ -192,7 +201,7 @@ function vistaGuardia_(g, m) {
     anticipable: esAnticipable_(g.fecha),
     control_pendiente: esHizo && controlPendiente_(g),
     control: g.control_anticipada,
-    puede_cubrir: esTitular && !anulada && !(confirmada && cerrado),
+    puede_cubrir: esTitular && !anulada && !(confirmada && cerrado) && !esSoloReemplazo_(m),
     acciones: accionesDe_(g, m),
     deshacer_min: minutosParaDeshacer_(g, m),
     tipos_posibles: tipos,
@@ -270,7 +279,8 @@ function apiCandidatos_(m, a) {
     if (g.fecha === fecha && g.turno === turno && g.estado === ESTADO.PREVISTA && g.medico_titular_id && g.medico_titular_id !== m.id &&
       (!g.medico_que_hizo_id || g.medico_que_hizo_id === g.medico_titular_id)) conGuardia[g.medico_titular_id] = true;
   });
-  const lista = medicos_().filter(function (o) { return o.id !== m.id; }).map(function (o) {
+  // Un médico de reemplazos no tiene guardias propias: no se lo puede elegir como titular.
+  const lista = medicos_().filter(function (o) { return o.id !== m.id && !esSoloReemplazo_(o); }).map(function (o) {
     return { id: o.id, nombre: o.nombre_apellido, prevista: !!conGuardia[o.id], sugerido: sugerirTipo_(o.id, fecha) };
   }).sort(function (x, y) {
     if (x.prevista !== y.prevista) return x.prevista ? -1 : 1;
@@ -310,6 +320,10 @@ function apiDeudas_(m) {
 
 function apiContrato_(m) {
   return {
+    vinculo: vinculoDe_(m),
+    email: m.email || '',
+    telegram: !!m.telegram_chat_id,
+    enlace_telegram: m.telegram_chat_id ? '' : enlaceVinculo_(m.id),
     filas: fijasVigentes_().filter(function (f) { return f.medico_id === m.id; }).map(function (f) {
       return { dia_semana: normalizarDia_(f.dia_semana), turno: f.turno, tipo: f.tipo || TIPO.CONTRATO };
     }),
@@ -322,6 +336,7 @@ function apiCambiarMiPin_(m, actual, nuevo) {
   if (!/^\d{4}$/.test(String(nuevo))) throw new ErrorUsuario('El PIN nuevo tiene que tener 4 números.');
   if (m.pin !== hashPin_(m.id, String(actual))) throw new ErrorUsuario('El PIN actual no es correcto.');
   m.pin = hashPin_(m.id, String(nuevo));
+  m.pin_propio = true;
   guardar_('MEDICOS', m);
   registrar_(m.nombre_apellido, 'cambio_pin', '');
   return { token: crearSesion_(m) };

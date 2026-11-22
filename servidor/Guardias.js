@@ -260,6 +260,7 @@ function meCubre_(m, gId, tipo, cubridorId) {
   const g = guardiaDe_(gId);
   exigirEditable_(g);
   if (g.medico_titular_id !== m.id) throw new ErrorUsuario('Solo el titular puede decir quién lo cubre.');
+  if (esSoloReemplazo_(m)) throw new ErrorUsuario('Como médico de reemplazos nadie te cubre: si no vas a hacer este reemplazo, tocá Anular.');
   if (tipo !== TIPO.HOSPITAL && tipo !== TIPO.COMPANERO) throw new ErrorUsuario('Elegí quién paga.');
   if (String(cubridorId) === m.id) throw new ErrorUsuario('Elegí a otro médico.');
   if (!cubridorId && tipo === TIPO.COMPANERO) throw new ErrorUsuario('Elegí qué compañero te cubre.');
@@ -328,6 +329,9 @@ function cargarGuardia_(m, datos) {
   if (mesCerrado_(mesDe_(fecha)) && datos.reclamo !== true) throw new ErrorUsuario(MENSAJE_MES_CERRADO);
   if (titularId === m.id) throw new ErrorUsuario('Esa guardia es tuya: confirmala desde Mi mes.');
   if (titularId && !buscarPorId_('MEDICOS', titularId)) throw new ErrorUsuario('No encontré a ese médico.');
+  if (titularId && esSoloReemplazo_(buscarPorId_('MEDICOS', titularId))) {
+    throw new ErrorUsuario(nombreDe_(titularId) + ' es médico de reemplazos: no tiene guardias para cubrir. Cargala como puesto vacante.');
+  }
   const tipo = datos.tipo || sugerirTipo_(titularId, fecha);
   if (tipo !== TIPO.HOSPITAL && tipo !== TIPO.COMPANERO) throw new ErrorUsuario('Elegí quién paga.');
   if (!titularId && tipo === TIPO.COMPANERO) throw new ErrorUsuario('Si no hay titular, lo paga el hospital.');
@@ -634,7 +638,8 @@ function sembrarGuardias_(mes, desdeFecha, soloMedicoId) {
   });
   const fijas = fijasVigentes_();
   medicos_().filter(function (m) { return !soloMedicoId || m.id === String(soloMedicoId); }).forEach(function (m) {
-    fijas.filter(function (f) { return f.medico_id === m.id; }).forEach(function (f) {
+    const solo = esSoloReemplazo_(m);
+    fijas.filter(function (f) { return f.medico_id === m.id && (!solo || f.tipo === TIPO.HOSPITAL); }).forEach(function (f) {
       const dia = normalizarDia_(f.dia_semana);
       diasDelMes_(mes).forEach(function (fecha) {
         if (DIAS[diaSemana_(fecha)] !== dia || (desdeFecha && fecha < desdeFecha)) return;
@@ -660,8 +665,11 @@ function abrirMes_(mes) {
   return creadas;
 }
 
-function validarFija_(filas) {
+function validarFija_(filas, soloReemplazo) {
   if (!Array.isArray(filas)) throw new ErrorUsuario('Revisá tu guardia fija.');
+  if (soloReemplazo && filas.some(function (f) { return f.tipo !== TIPO.HOSPITAL; })) {
+    throw new ErrorUsuario('Como médico de reemplazos no tenés guardia de contrato: cargá solo reemplazos fijos.');
+  }
   const limpias = filas.map(function (f) {
     const dia = normalizarDia_(f.dia_semana);
     if (DIAS.indexOf(dia) < 0 || !TURNOS[f.turno]) throw new ErrorUsuario('Revisá el día y el turno.');
@@ -680,7 +688,7 @@ function validarFija_(filas) {
 
 // Reemplaza la guardia fija, sin aprobación de nadie. Lo anterior queda como no vigente.
 function guardarFija_(medicoId, filas) {
-  const limpias = validarFija_(filas);
+  const limpias = validarFija_(filas, esSoloReemplazo_(buscarPorId_('MEDICOS', medicoId)));
   filas_('GUARDIA_FIJA').filter(function (f) { return f.medico_id === medicoId && f.vigente !== 'FALSE'; }).forEach(function (f) {
     f.vigente = false;
     guardar_('GUARDIA_FIJA', f);

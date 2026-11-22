@@ -11,6 +11,7 @@
     --anticipada: #a8e6dc; --vacaciones: #fbe0b5; --espera: #fdeb9c; --conflicto: #f6b3b0;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html { -webkit-text-size-adjust: 100%; }
   body { margin: 0; background: var(--fondo); color: var(--texto); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
   header { background: var(--primario); color: #fff; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -71,11 +72,18 @@
   #fijo { position: fixed; left: 0; right: 0; bottom: 58px; padding: 8px 16px; background: linear-gradient(transparent, var(--fondo) 30%); z-index: 4; }
   #fijo button { display: block; width: 100%; max-width: 688px; margin: 0 auto; min-height: 52px; font-size: 17px; font-weight: 700; border-radius: 12px; border: none; background: #17602d; color: #fff; cursor: pointer; box-shadow: 0 2px 6px #0003; }
   main.confijo { padding-bottom: 170px; }
+  .progreso { margin: 4px 0 6px; }
+  .progreso .barra { height: 8px; background: #dfe5ec; border-radius: 4px; overflow: hidden; margin-top: 4px; }
+  .progreso .barra span { display: block; height: 100%; background: var(--primario); }
+  .opciones.dias { flex-wrap: wrap; }
+  .opciones.dias button { flex: 1 0 calc(25% - 6px); }
+  button.verde { background: #17602d; border-color: #17602d; color: #fff; }
+  .bloque { border-top: 1px solid #edf0f4; padding-top: 10px; margin-top: 10px; }
 </style>
 </head>
 <body><div id="demo-cartel" style="background:#b45309;color:#fff;padding:8px 12px;font:600 14px/1.35 system-ui,Arial,sans-serif;text-align:center">
   DEMO — datos de prueba
-  <div style="font-weight:400;font-size:12px;margin-top:2px">Todos los PIN: 1111 · Jefe: JAVIER GARCIA · No usa la planilla real ni manda mensajes</div>
+  <div style="font-weight:400;font-size:12px;margin-top:2px">Todos los PIN: 1111 · Jefe: JAVIER GARCIA · PAULA RIOS: registro desde cero · SOFIA LUNA: solo reemplazos · No usa la planilla real ni manda mensajes</div>
   <div style="margin-top:6px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
     <button type="button" id="demo-mensajes" style="font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer">Mensajes simulados</button>
     <button type="button" id="demo-reiniciar" style="font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer">Reiniciar demo</button>
@@ -121,6 +129,14 @@
   const listo = new Promise((res) => marco.addEventListener('load', () => res(marco.contentWindow)));
   document.documentElement.appendChild(marco);
   window.demoServidor = () => listo;
+  // En la demo no hay bot: "Vincular Telegram" simula la vinculación en vez de abrir Telegram.
+  document.addEventListener('click', (ev) => {
+    const a = ev.target.closest && ev.target.closest('a[href^="https://t.me/"]');
+    if (!a) return;
+    ev.preventDefault();
+    const codigo = new URL(a.href).searchParams.get('start');
+    listo.then((s) => { s.demoVincularTelegram(codigo); alert('DEMO: Telegram quedó vinculado (simulado). Tocá "Ya lo vinculé".'); });
+  }, true);
   window.google = { script: { get run() {
     const crear = (ok, mal) => new Proxy({}, { get(_, k) {
       if (k === 'withSuccessHandler') return (f) => crear(f, mal);
@@ -142,7 +158,7 @@ const CLAVE = 'guardias_upa_sesion';
 const DIAS_CAB = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 const TIPOS = { CONTRATO: 'Contrato', REEMPLAZO_HOSPITAL: 'Paga el hospital', COBERTURA_COMPANERO: 'Paga el compañero' };
 const ESTADOS = { PREVISTA: 'Prevista', CONFIRMADA: 'Confirmada', CONFIRMADA_ANTICIPADA: 'Confirmada por adelantado', ESPERANDO_CONFIRMACION_TITULAR: 'Esperando confirmación', EN_CONFLICTO: 'En conflicto', ANULADA: 'Anulada' };
-const NAV_MEDICO = [['mes', 'Mi mes'], ['vacaciones', 'Vacaciones'], ['deudas', 'Deudas'], ['contrato', 'Guardia fija']];
+const NAV_MEDICO = [['mes', 'Mi mes'], ['vacaciones', 'Vacaciones'], ['deudas', 'Deudas'], ['contrato', 'Mi perfil']];
 const NAV_JEFE = [['tablero', 'Tablero'], ['conflictos', 'Conflictos'], ['excel', 'Excel'], ['medicos', 'Médicos'], ['ajustes', 'Ajustes']];
 const VISTAS_JEFE = NAV_JEFE.map(n => n[0]);
 
@@ -177,6 +193,7 @@ function llamar(metodo, ...args) {
       .withSuccessHandler((r) => {
         if (r && r.ok) return ok(r.datos);
         if (r && r.sesion) { salir(); return mal(new Error(r.error)); }
+        if (r && r.registro) { arrancar(); return mal(new Error(r.error)); }
         mal(new Error((r && r.error) || 'Hubo un error.'));
       })
       .withFailureHandler(() => mal(new Error('No hay conexión. Probá de nuevo.')))
@@ -258,7 +275,7 @@ async function arrancar() {
   $('cab').hidden = false;
   $('cab-nombre').textContent = datos.yo.nombre;
   $('btn-jefe').hidden = !datos.yo.admin;
-  if (datos.revisar_contrato) return pantallaRevisarContrato();
+  if (datos.registro) return pantallaRegistro();
   seguirAlInicio();
 }
 
@@ -270,15 +287,171 @@ function seguirAlInicio() {
   ir(inicial === 'confirmar' ? 'mes' : inicial);
 }
 
-// Primer ingreso: revisa la guardia fija que se le cargó.
-function pantallaRevisarContrato() {
-  const capital = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-  const lineas = datos.fijas.map((f) => el('div', { class: 'destacado', style: 'margin-bottom:6px' }, capital(f.dia_semana) + ' · ' + f.turno,
-    el('div', { class: 'suave', style: 'font-weight:400' }, f.tipo === 'REEMPLAZO_HOSPITAL' ? 'Reemplazo fijo (paga el hospital)' : 'Contrato')));
-  pintar(el('h2', null, '¿Es correcta tu guardia de contrato?'),
-    el('div', { class: 'tarjeta' }, lineas.length ? lineas : el('span', { class: 'suave' }, 'Todavía no tenés una guardia cargada.')),
-    el('button', { class: 'grande', onclick: accion(async () => { await llamar('confirmarContrato'); datos.revisar_contrato = false; seguirAlInicio(); }) }, 'Sí'),
-    el('button', { class: 'grande sec', onclick: () => { datos.revisar_contrato = false; ir('contrato'); } }, 'Corregir'));
+const esSolo = () => !!datos && datos.yo.vinculo === 'SOLO_REEMPLAZO';
+const NOMBRE_DIA = { lunes: 'Lun', martes: 'Mar', miercoles: 'Mié', jueves: 'Jue', viernes: 'Vie', sabado: 'Sáb', domingo: 'Dom' };
+
+// --- Registro: un paso por pantalla. Hasta terminarlo no se puede hacer nada más. ---
+let reg = null;
+function pantallaRegistro() {
+  $('nav').hidden = true;
+  $('fijo').hidden = true;
+  $('btn-jefe').hidden = true;
+  reg = { paso: datos.registro.paso, b: Object.assign({ contrato: [], reemplazos: [] }, datos.registro.borrador) };
+  pasoRegistro();
+}
+function pasoRegistro() {
+  ({ '1': regPin, '2': regVinculo, '3': regGuardia, '3v': regVacaciones, '4': regAvisos, '5': regResumen }[reg.paso] || regVinculo)();
+}
+function progreso(n) {
+  return el('div', { class: 'progreso', 'aria-label': 'Paso ' + n + ' de 5' }, el('div', { class: 'suave' }, 'Paso ' + n + ' de 5'),
+    el('div', { class: 'barra' }, el('span', { style: 'width:' + n * 20 + '%' })));
+}
+// Como accion(), pero si falla se queda en el mismo paso del registro.
+function regAccion(fn) {
+  return async (ev) => {
+    const b = ev && ev.currentTarget;
+    if (b) b.disabled = true;
+    try { await fn(); } catch (e) { aviso = { texto: e.message, error: true }; pasoRegistro(); }
+  };
+}
+async function avanzar(paso) {
+  reg.b.paso = paso;
+  const r = await llamar('registroGuardar', reg.b);
+  reg.paso = r.paso;
+  reg.b = Object.assign({ contrato: [], reemplazos: [] }, r.borrador);
+  pasoRegistro();
+}
+function botonesDias(valor, elegir) {
+  return el('div', { class: 'opciones dias' }, datos.dias.map((d) =>
+    el('button', { type: 'button', 'data-dia': d, 'aria-pressed': String(d === valor), onclick: () => elegir(d) }, NOMBRE_DIA[d] || d)));
+}
+function botonesOpcion(lista, valor, elegir) {
+  return el('div', { class: 'opciones' }, lista.map(([v, t]) =>
+    el('button', { type: 'button', 'data-valor': v, 'aria-pressed': String(v === valor), onclick: () => elegir(v) }, t)));
+}
+
+function regPin() {
+  const a = el('input', { id: 'r-pin', type: 'password', inputMode: 'numeric', maxLength: 4, pattern: '[0-9]*', autocomplete: 'new-password' });
+  const b = el('input', { id: 'r-pin2', type: 'password', inputMode: 'numeric', maxLength: 4, pattern: '[0-9]*', autocomplete: 'new-password' });
+  pintar(progreso(1), bloqueAviso(), el('h2', null, 'Creá tu PIN'),
+    el('p', { class: 'suave' }, 'Es el que vas a usar para entrar. Tiene que ser distinto del que te dieron.'),
+    el('label', { htmlFor: 'r-pin' }, 'PIN nuevo (4 números)'), a, el('label', { htmlFor: 'r-pin2' }, 'Repetilo'), b, el('br'), el('br'),
+    el('button', { class: 'grande', id: 'r-siguiente', onclick: regAccion(async () => {
+      if (!/^\d{4}$/.test(a.value)) throw new Error('El PIN tiene que tener 4 números.');
+      if (a.value !== b.value) throw new Error('Los dos PIN no coinciden.');
+      const r = await llamar('registroPin', a.value);
+      token = r.token; escribir(token);
+      datos = await llamar('inicio');
+      if (!datos.registro) { $('btn-jefe').hidden = !datos.yo.admin; aviso = { texto: 'PIN guardado.' }; return seguirAlInicio(); }
+      pantallaRegistro();
+    }) }, 'Siguiente'));
+}
+
+function regVinculo() {
+  const elegir = (v) => regAccion(async () => { reg.b.vinculo = v; await avanzar('3'); });
+  pintar(progreso(2), bloqueAviso(), el('h2', null, '¿Cómo trabajás en el servicio?'),
+    el('button', { class: 'grande', onclick: elegir('CONTRATO') }, 'Tengo guardia de contrato'),
+    el('button', { class: 'grande sec', onclick: elegir('SOLO_REEMPLAZO') }, 'Solo hago reemplazos'));
+}
+
+function regGuardia() {
+  const b = reg.b;
+  const atras = el('button', { class: 'grande sec', onclick: regAccion(() => avanzar('2')) }, 'Atrás');
+  if (b.vinculo === 'SOLO_REEMPLAZO') {
+    const nodos = [progreso(3), bloqueAviso(), el('h2', null, '¿Tenés reemplazos fijos todas las semanas?')];
+    if (b.tiene_fijos !== true) {
+      nodos.push(el('button', { class: 'grande', onclick: () => { b.tiene_fijos = true; if (!b.reemplazos.length) b.reemplazos.push({ dia_semana: '', turno: '24H' }); regGuardia(); } }, 'Sí, cargarlos'),
+        el('button', { class: 'grande sec', onclick: regAccion(async () => { b.tiene_fijos = false; b.reemplazos = []; await avanzar('3v'); }) }, 'No, son variables'), atras);
+      return pintar(nodos);
+    }
+    b.reemplazos.forEach((r, i) => {
+      nodos.push(el('div', { class: 'tarjeta' }, el('b', null, 'Reemplazo fijo ' + (i + 1)),
+        el('label', null, 'Día'), botonesDias(r.dia_semana, (d) => { r.dia_semana = d; regGuardia(); }),
+        el('label', null, 'Turno'), botonesOpcion([['24H', '24 h'], ['12H_DIA', '12 h día'], ['12H_NOCHE', '12 h noche']], r.turno, (t) => { r.turno = t; regGuardia(); }),
+        b.reemplazos.length > 1 ? el('div', { style: 'margin-top:8px' }, el('button', { class: 'chico', onclick: () => { b.reemplazos.splice(i, 1); regGuardia(); } }, 'Quitar')) : null));
+    });
+    const completo = b.reemplazos.every((r) => r.dia_semana);
+    nodos.push(el('button', { class: 'chico', onclick: () => { b.reemplazos.push({ dia_semana: '', turno: '24H' }); regGuardia(); } }, '+ Agregar otro'), el('br'), el('br'),
+      el('button', { class: 'grande', id: 'r-siguiente', disabled: !completo, onclick: regAccion(() => avanzar('3v')) }, 'Siguiente'),
+      el('button', { class: 'grande sec', onclick: () => { b.tiene_fijos = null; regGuardia(); } }, 'Atrás'));
+    return pintar(nodos);
+  }
+  // Contrato: [24 h] o [12 h + 12 h]
+  const nodos = [progreso(3), bloqueAviso(), el('h2', null, 'Tu guardia de contrato'),
+    botonesOpcion([['24', '24 h'], ['12', '12 h + 12 h']], b.modo, (m) => {
+      if (m !== b.modo) b.contrato = m === '24' ? [{ dia_semana: '', turno: '24H' }] : [{ dia_semana: '', turno: '' }, { dia_semana: '', turno: '' }];
+      b.modo = m; regGuardia();
+    })];
+  if (b.modo === '24') {
+    if (!b.contrato.length) b.contrato = [{ dia_semana: '', turno: '24H' }];
+    nodos.push(el('label', null, '¿Qué día?'), botonesDias(b.contrato[0].dia_semana, (d) => { b.contrato[0] = { dia_semana: d, turno: '24H' }; regGuardia(); }));
+  } else if (b.modo === '12') {
+    while (b.contrato.length < 2) b.contrato.push({ dia_semana: '', turno: '' });
+    b.contrato.slice(0, 2).forEach((c, i) => {
+      nodos.push(el('div', { class: 'bloque' }, el('b', null, (i ? 'Segunda' : 'Primera') + ' guardia de 12 h'),
+        el('label', null, 'Día'), botonesDias(c.dia_semana, (d) => { c.dia_semana = d; regGuardia(); }),
+        el('label', null, 'Turno'), botonesOpcion([['12H_DIA', 'Día'], ['12H_NOCHE', 'Noche']], c.turno, (t) => { c.turno = t; regGuardia(); })));
+    });
+  }
+  const completo = (b.modo === '24' && b.contrato[0] && b.contrato[0].dia_semana) ||
+    (b.modo === '12' && b.contrato.length >= 2 && b.contrato.slice(0, 2).every((c) => c.dia_semana && c.turno));
+  nodos.push(el('br'), el('button', { class: 'grande', id: 'r-siguiente', disabled: !completo, onclick: regAccion(() => avanzar('3v')) }, 'Siguiente'), atras);
+  pintar(nodos);
+}
+
+function regVacaciones() {
+  const b = reg.b;
+  const nodos = [progreso(3), bloqueAviso(), el('h2', null, '¿Tenés vacaciones este mes?'), el('p', { class: 'suave' }, 'Opcional. También las podés cargar después.')];
+  if (b.tiene_vacaciones !== true) {
+    nodos.push(el('button', { class: 'grande', onclick: regAccion(async () => { b.tiene_vacaciones = false; b.vacaciones = null; await avanzar('4'); }) }, 'No'),
+      el('button', { class: 'grande sec', onclick: () => { b.tiene_vacaciones = true; regVacaciones(); } }, 'Sí, cargar las fechas'),
+      el('button', { class: 'grande sec', onclick: regAccion(() => avanzar('3')) }, 'Atrás'));
+    return pintar(nodos);
+  }
+  const v = b.vacaciones || {};
+  const desde = el('input', { id: 'r-desde', type: 'date', value: v.desde || '' });
+  const hasta = el('input', { id: 'r-hasta', type: 'date', value: v.hasta || '' });
+  nodos.push(el('label', { htmlFor: 'r-desde' }, 'Desde'), desde, el('label', { htmlFor: 'r-hasta' }, 'Hasta'), hasta, el('br'), el('br'),
+    el('button', { class: 'grande', id: 'r-siguiente', onclick: regAccion(async () => {
+      if (!desde.value || !hasta.value) throw new Error('Elegí las dos fechas.');
+      if (hasta.value < desde.value) throw new Error('La fecha "hasta" no puede ser anterior a "desde".');
+      b.vacaciones = { desde: desde.value, hasta: hasta.value };
+      await avanzar('4');
+    }) }, 'Siguiente'),
+    el('button', { class: 'grande sec', onclick: () => { b.tiene_vacaciones = null; regVacaciones(); } }, 'Atrás'));
+  pintar(nodos);
+}
+
+function regAvisos() {
+  const b = reg.b;
+  const email = el('input', { id: 'r-email', type: 'email', value: b.email || datos.yo.email || '', placeholder: 'tu@mail.com' });
+  const revisar = regAccion(async () => { datos = await llamar('inicio'); pasoRegistro(); });
+  const tg = datos.yo.telegram ? el('div', { class: 'ok' }, 'Telegram vinculado ✓')
+    : datos.yo.enlace_telegram ? [el('a', { class: 'grande', id: 'r-telegram', href: datos.yo.enlace_telegram, target: '_blank', rel: 'noopener' }, 'Vincular Telegram'),
+      el('button', { class: 'chico', onclick: revisar }, 'Ya lo vinculé')]
+      : el('div', { class: 'regla' }, 'El aviso por Telegram todavía no está listo. Lo vas a poder activar después desde Mi perfil.');
+  pintar(progreso(4), bloqueAviso(), el('h2', null, '¿Cómo te avisamos?'),
+    el('p', { class: 'suave' }, 'Te mandamos un recordatorio el día de cada guardia, para que la confirmes con un toque.'),
+    el('div', { class: 'tarjeta' }, tg, el('label', { htmlFor: 'r-email' }, 'Mail (opcional)'), email),
+    el('button', { class: 'grande', id: 'r-siguiente', onclick: regAccion(async () => { b.email = email.value.trim(); await avanzar('5'); }) }, 'Siguiente'),
+    el('button', { class: 'grande sec', onclick: regAccion(async () => { b.email = ''; await avanzar('5'); }) }, 'Saltar este paso'),
+    el('button', { class: 'grande sec', onclick: regAccion(() => avanzar('3v')) }, 'Atrás'));
+}
+
+async function regResumen() {
+  cargando();
+  let r;
+  try { r = await llamar('registroResumen'); } catch (e) { aviso = { texto: e.message, error: true }; reg.paso = '4'; return pasoRegistro(); }
+  pintar(progreso(5), bloqueAviso(), el('h2', null, 'Revisá tus datos'),
+    el('div', { class: 'tarjeta destacado', id: 'r-resumen' }, r.resumen),
+    el('button', { class: 'grande', id: 'r-confirmar', onclick: regAccion(async () => {
+      await llamar('registroConfirmar');
+      datos = await llamar('inicio');
+      $('btn-jefe').hidden = !datos.yo.admin;
+      aviso = { texto: '¡Listo! Ya podés usar la app. Todo se puede cambiar después desde Mi perfil.' };
+      seguirAlInicio();
+    }) }, 'Confirmar'),
+    el('button', { class: 'grande sec', onclick: regAccion(() => avanzar('2')) }, 'Corregir'));
 }
 
 function ir(v) {
@@ -291,7 +464,7 @@ function ir(v) {
 function pintarNav() {
   const nav = $('nav');
   nav.hidden = false;
-  $('fijo').hidden = modoJefe || vista !== 'mes';
+  $('fijo').hidden = modoJefe || vista !== 'mes' || esSolo();
   $('btn-jefe').textContent = modoJefe ? 'Vista médico' : 'Vista jefe';
   nav.replaceChildren(...(modoJefe ? NAV_JEFE : NAV_MEDICO).map(([k, t]) => el('button', { class: vista === k ? 'activo' : '', onclick: () => ir(k) }, t)));
 }
@@ -322,6 +495,9 @@ async function verMes() {
   const leyenda = [['prevista', 'Prevista'], ['confirmada', 'Confirmada'], ['anticipada', 'Por adelantado'], ['cubierta', 'Cubierta'], ['reemplazo', 'Reemplazo'], ['vacaciones', 'Vacaciones'], ['espera', 'Esperando'], ['conflicto', 'Conflicto']];
   pintar(
     bloqueAviso(),
+    esSolo() ? el('button', { class: 'grande verde', id: 'btn-cargar-reemplazo', onclick: () => verCargar(datos.hoy) }, '+ Cargar reemplazo') : null,
+    datos.recordar_avisos ? el('div', { class: 'regla' }, 'Todavía no activaste los avisos: no te vamos a poder recordar tus guardias. ',
+      el('button', { class: 'chico', onclick: () => ir('contrato') }, 'Activar avisos')) : null,
     el('div', { class: 'tarjeta' }, el('div', { class: 'destacado' }, 'Reemplazos confirmados este mes: ' + d.reemplazos + (d.reemplazos ? ', se cobran el ' + d.cobro : '')),
       d.reemplazos ? null : el('div', { class: 'suave' }, 'Lo de este mes se cobra el ' + d.cobro + '.')),
     el('div', { class: 'regla' }, datos.regla),
@@ -547,7 +723,7 @@ async function verCargar(fechaInicial, comoReclamo) {
         b.disabled = false;
       }
     } }, 'Guardar'));
-  pintar(bloqueAviso(), el('h2', null, 'Cargar guardia del ' + fechaLinda(fechaInicial)),
+  pintar(bloqueAviso(), el('h2', null, (esSolo() ? 'Cargar reemplazo del ' : 'Cargar guardia del ') + fechaLinda(fechaInicial)),
     el('label', { htmlFor: 'c-fecha' }, 'Fecha'), fecha, el('br'), el('br'), estadoCarga, avisoCerrado, tarjetaZona,
     el('button', { class: 'grande sec', onclick: () => ir('mes') }, 'Volver'));
   await refrescar();
@@ -600,7 +776,8 @@ async function verDeudas() {
 
 // --- Médico: Guardia fija ---
 const selDia = (dias, v) => el('select', null, dias.map((d) => el('option', { value: d, selected: d === v }, d.charAt(0).toUpperCase() + d.slice(1))));
-function editorFija(filas, dias, turnos) {
+function editorFija(filas, dias, turnos, soloReemplazo) {
+  if (soloReemplazo) filas.forEach((f) => { f.tipo = 'REEMPLAZO_HOSPITAL'; });
   const contenedor = el('div');
   const pintarFilas = () => {
     contenedor.replaceChildren(...filas.map((f, i) => {
@@ -610,25 +787,43 @@ function editorFija(filas, dias, turnos) {
       turno.addEventListener('change', () => { f.turno = turno.value; });
       const tipo = el('select', null, el('option', { value: 'CONTRATO', selected: f.tipo !== 'REEMPLAZO_HOSPITAL' }, 'Contrato'), el('option', { value: 'REEMPLAZO_HOSPITAL', selected: f.tipo === 'REEMPLAZO_HOSPITAL' }, 'Reemplazo fijo (paga el hospital)'));
       tipo.addEventListener('change', () => { f.tipo = tipo.value; });
-      return el('div', { style: 'border-top:1px solid #edf0f4;padding:8px 0' }, dia, el('br'), el('br'), turno, el('br'), el('br'), tipo, el('br'), el('br'),
+      return el('div', { style: 'border-top:1px solid #edf0f4;padding:8px 0' }, dia, el('br'), el('br'), turno, el('br'), el('br'), soloReemplazo ? null : [tipo, el('br'), el('br')],
         el('button', { class: 'chico', onclick: () => { filas.splice(i, 1); pintarFilas(); } }, 'Quitar'));
     }));
   };
   pintarFilas();
   return el('div', null, contenedor,
-    el('button', { class: 'chico', onclick: () => { filas.push({ dia_semana: 'lunes', turno: '24H', tipo: 'CONTRATO' }); pintarFilas(); } }, '+ Agregar guardia'));
+    el('button', { class: 'chico', onclick: () => { filas.push({ dia_semana: 'lunes', turno: '24H', tipo: soloReemplazo ? 'REEMPLAZO_HOSPITAL' : 'CONTRATO' }); pintarFilas(); } }, soloReemplazo ? '+ Agregar reemplazo fijo' : '+ Agregar guardia'));
 }
 async function verContrato() {
   cargando();
   let c;
   try { c = await llamar('contrato'); } catch (e) { return mostrarError(e); }
   const filas = c.filas.map((f) => Object.assign({}, f));
-  pintar(bloqueAviso(), el('h2', null, 'Mi guardia fija'),
+  const solo = c.vinculo === 'SOLO_REEMPLAZO';
+  datos.yo.vinculo = c.vinculo;
+  let pedido = null;
+  const zonaVinculo = el('div');
+  const pintarVinculo = () => zonaVinculo.replaceChildren(
+    botonesOpcion([['CONTRATO', 'Tengo contrato'], ['SOLO_REEMPLAZO', 'Solo reemplazos']], pedido || c.vinculo, (v) => { pedido = v === c.vinculo ? null : v; pintarVinculo(); }),
+    pedido ? el('div', { style: 'margin-top:10px' },
+      el('div', { class: 'regla' }, pedido === 'SOLO_REEMPLAZO' ? 'Tus guardias de contrato que vienen se anulan. Tus reemplazos fijos se mantienen.' : 'Después cargá tu guardia de contrato acá abajo.'),
+      el('button', { class: 'grande', id: 'p-vinculo', onclick: accion(async () => { await llamar('cambiarMiVinculo', pedido); aviso = { texto: 'Listo, cambiaste cómo trabajás en el servicio.' }; verContrato(); }) }, 'Confirmar el cambio')) : '');
+  pintarVinculo();
+  const email = el('input', { id: 'p-email', type: 'email', value: c.email, placeholder: 'tu@mail.com' });
+  pintar(bloqueAviso(), el('h2', null, 'Mi perfil'),
+    el('div', { class: 'tarjeta' }, el('h3', { style: 'margin-top:0' }, '¿Cómo trabajás en el servicio?'), zonaVinculo),
     el('div', { class: 'tarjeta' },
-      el('p', { class: 'suave', style: 'margin-top:0' }, 'Contrato: 24 h por semana (24 h un día, o 12 h + 12 h). Los reemplazos fijos se piden y se confirman cada día como cualquier guardia.'),
-      editorFija(filas, c.dias, c.turnos), el('br'), el('br'),
-      el('button', { class: 'grande', onclick: accion(async () => { await llamar('guardarMiFija', filas); aviso = { texto: 'Guardia fija guardada.' }; verContrato(); }) }, 'Guardar')),
-    datos.yo.telegram ? el('div', { class: 'ok' }, 'Telegram vinculado.') : datos.yo.enlace_telegram ? el('a', { class: 'grande', href: datos.yo.enlace_telegram, target: '_blank', rel: 'noopener' }, 'Vincular Telegram') : null,
+      el('h3', { style: 'margin-top:0' }, solo ? 'Reemplazos fijos semanales' : 'Mi guardia fija'),
+      el('p', { class: 'suave', style: 'margin-top:0' }, solo ? 'Los reemplazos que hacés todas las semanas. Se piden y se confirman cada día como cualquier guardia. Si son variables, dejalo vacío.'
+        : 'Contrato: 24 h por semana (24 h un día, o 12 h + 12 h). Los reemplazos fijos se piden y se confirman cada día como cualquier guardia.'),
+      editorFija(filas, c.dias, c.turnos, solo), el('br'), el('br'),
+      el('button', { class: 'grande', onclick: accion(async () => { await llamar('guardarMiFija', filas); aviso = { texto: solo ? 'Reemplazos fijos guardados.' : 'Guardia fija guardada.' }; verContrato(); }) }, 'Guardar')),
+    el('div', { class: 'tarjeta' }, el('h3', { style: 'margin-top:0' }, 'Avisos'),
+      c.telegram ? el('div', { class: 'ok' }, 'Telegram vinculado.') : c.enlace_telegram ? el('a', { class: 'grande', href: c.enlace_telegram, target: '_blank', rel: 'noopener' }, 'Vincular Telegram')
+        : el('div', { class: 'suave' }, 'El aviso por Telegram todavía no está listo.'),
+      el('label', { htmlFor: 'p-email' }, 'Mail (opcional)'), email, el('br'), el('br'),
+      el('button', { class: 'grande sec', onclick: accion(async () => { await llamar('guardarMiEmail', email.value); datos.yo.email = email.value.trim(); datos.recordar_avisos = !c.telegram && !datos.yo.email; aviso = { texto: 'Mail guardado.' }; verContrato(); }) }, 'Guardar mail')),
     bloquePin());
 }
 function bloquePin() {
@@ -743,12 +938,19 @@ async function verMedicos() {
   const nombre = el('input', { placeholder: 'NOMBRE APELLIDO (como va a RRHH)', 'aria-label': 'Nombre y apellido', id: 'm-nombre' });
   const email = el('input', { type: 'email', placeholder: 'Mail', 'aria-label': 'Mail', id: 'm-email' });
   const pin = el('input', { inputMode: 'numeric', maxLength: 4, placeholder: 'PIN de 4 números', 'aria-label': 'PIN', id: 'm-pin' });
+  const vinculo = selVinculo('CONTRATO', 'm-vinculo');
   pintar(bloqueAviso(), el('h2', null, 'Médicos'),
-    el('div', { class: 'tarjeta' }, el('h3', { style: 'margin-top:0' }, 'Agregar médico'), nombre, el('br'), el('br'), email, el('br'), el('br'), pin, el('br'), el('br'),
-      el('button', { class: 'grande', onclick: accion(async () => { await llamar('guardarMedico', { nombre: nombre.value, email: email.value, pin: pin.value }); aviso = { texto: 'Médico agregado.' }; verMedicos(); }) }, 'Agregar')),
+    el('div', { class: 'tarjeta' }, el('h3', { style: 'margin-top:0' }, 'Agregar médico'), nombre, el('br'), el('br'), email, el('br'), el('br'), pin, el('br'), el('br'), vinculo, el('br'), el('br'),
+      el('p', { class: 'suave', style: 'margin-top:0' }, 'Al entrar por primera vez, el médico elige su PIN y carga su guardia en el registro.'),
+      el('button', { class: 'grande', onclick: accion(async () => { await llamar('guardarMedico', { nombre: nombre.value, email: email.value, pin: pin.value, vinculo: vinculo.value }); aviso = { texto: 'Médico agregado.' }; verMedicos(); }) }, 'Agregar')),
     d.medicos.map((m) => tarjetaMedico(m, d)));
 }
+function selVinculo(valor, id) {
+  return el('select', { id: id, 'aria-label': 'Vínculo' }, el('option', { value: 'CONTRATO', selected: valor !== 'SOLO_REEMPLAZO' }, 'Con guardia de contrato'),
+    el('option', { value: 'SOLO_REEMPLAZO', selected: valor === 'SOLO_REEMPLAZO' }, 'Solo reemplazos'));
+}
 function tarjetaMedico(m, d) {
+  const vinculo = selVinculo(m.vinculo);
   const email = el('input', { type: 'email', value: m.email, placeholder: 'Mail', 'aria-label': 'Mail de ' + m.nombre });
   const nombre = el('input', { value: m.nombre, 'aria-label': 'Nombre de ' + m.nombre });
   const pin = el('input', { inputMode: 'numeric', maxLength: 4, placeholder: 'PIN nuevo (dejar vacío para no cambiar)', 'aria-label': 'PIN nuevo de ' + m.nombre });
@@ -756,12 +958,14 @@ function tarjetaMedico(m, d) {
   const admin = el('input', { type: 'checkbox', checked: m.admin });
   const filas = m.fijas.map((f) => Object.assign({}, f));
   return el('details', { class: 'tarjeta' },
-    el('summary', null, el('b', null, m.nombre), m.baja ? ' (baja)' : m.activo ? '' : ' (inactivo)', m.admin ? ' · administrador' : '', m.telegram ? ' · Telegram' : ''),
+    el('summary', null, el('b', null, m.nombre), m.baja ? ' (baja)' : m.activo ? '' : ' (inactivo)', m.admin ? ' · administrador' : '', m.telegram ? ' · Telegram' : '', m.vinculo === 'SOLO_REEMPLAZO' ? ' · solo reemplazos' : '',
+      el('span', { class: 'suave', 'data-registro': m.registro_completo ? 'si' : 'no' }, ' · Registro completo: ' + (m.registro_completo ? 'Sí' : 'No'))),
     el('label', null, 'Nombre (como va a RRHH)'), nombre, el('label', null, 'Mail'), email, el('label', null, 'PIN'), pin,
     m.pin_pendiente ? el('div', { class: 'suave' }, 'Todavía no entró por primera vez.') : null,
+    el('label', null, 'Vínculo'), vinculo,
     el('label', null, activo, ' Activo'), el('label', null, admin, ' Administrador'), el('br'),
-    el('button', { class: 'grande', onclick: accion(async () => { await llamar('guardarMedico', { id: m.id, nombre: nombre.value, email: email.value, pin: pin.value, activo: activo.checked, admin: admin.checked }); aviso = { texto: 'Guardado.' }; verMedicos(); }) }, 'Guardar datos'),
-    el('h3', null, 'Guardia fija'), editorFija(filas, d.dias, d.turnos),
+    el('button', { class: 'grande', onclick: accion(async () => { await llamar('guardarMedico', { id: m.id, nombre: nombre.value, email: email.value, pin: pin.value, activo: activo.checked, admin: admin.checked, vinculo: vinculo.value }); aviso = { texto: 'Guardado.' }; verMedicos(); }) }, 'Guardar datos'),
+    el('h3', null, m.vinculo === 'SOLO_REEMPLAZO' ? 'Reemplazos fijos semanales' : 'Guardia fija'), editorFija(filas, d.dias, d.turnos, m.vinculo === 'SOLO_REEMPLAZO'),
     el('br'), el('br'),
     el('button', { class: 'grande sec', onclick: accion(async () => { await llamar('guardarFijaDe', m.id, filas); aviso = { texto: 'Guardia fija guardada.' }; verMedicos(); }) }, 'Guardar guardia fija'));
 }

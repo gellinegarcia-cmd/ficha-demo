@@ -81,6 +81,10 @@ function tareaAbrirVentana_(mes) {
   const dia = Number(fechaCorte_(mes).slice(8));
   const texto = 'El ' + dia + ' se cierra el mes. Confirmá desde ahora tus guardias del ' + dia + ' al ' + Number(ultimoDia_(mes).slice(8)) + '.';
   medicos_().forEach(function (m) {
+    // Un médico de reemplazos solo recibe el aviso si tiene algo previsto entre el corte y fin de mes.
+    if (esSoloReemplazo_(m) && !filas_('GUARDIAS').some(function (g) {
+      return g.medico_que_hizo_id === m.id && g.estado === ESTADO.PREVISTA && mesDe_(g.fecha) === mes && esAnticipable_(g.fecha);
+    })) return;
     avisar_(m, texto, [[botonVista_('Ver mis guardias', 'mes')]], { asunto: 'Cierre de ' + nombreMes_(mes) });
   });
 }
@@ -89,7 +93,14 @@ function tareaAbrirMes_(mes) {
   abrirMes_(mes);
   const texto = 'Se abrió ' + nombreMes_(mes) + '. Revisá tus guardias y cargá tus vacaciones.';
   medicos_().forEach(function (m) {
+    if (esSoloReemplazo_(m) && !tieneGuardiasEnMes_(m, mes)) return;
     avisar_(m, texto, [[botonVista_('Ver mi mes', 'mes')]], { asunto: 'Se abrió ' + nombreMes_(mes) });
+  });
+}
+
+function tieneGuardiasEnMes_(m, mes) {
+  return filas_('GUARDIAS').some(function (g) {
+    return g.estado !== ESTADO.ANULADA && mesDe_(g.fecha) === mes && (g.medico_que_hizo_id === m.id || g.medico_titular_id === m.id);
   });
 }
 
@@ -105,9 +116,9 @@ function tareaRecordatorioDiario_(fecha) {
       avisar_(m, '¿Hiciste la guardia de hoy?', botonesControl_(g), { asunto: '¿Hiciste la guardia de hoy?' });
       return;
     }
-    const texto = 'Hoy tenés guardia de ' + TURNOS[g.turno].nombre + ' (' + (g.categoria === 'NO_HABIL' ? 'no hábil' : 'hábil') + ')';
+    const texto = 'Hoy tenés ' + (esSoloReemplazo_(m) ? 'reemplazo' : 'guardia') + ' de ' + TURNOS[g.turno].nombre + ' (' + (g.categoria === 'NO_HABIL' ? 'no hábil' : 'hábil') + ')';
     if (g.medico_que_hizo_id === g.medico_titular_id) {
-      avisar_(m, texto + '.', botonesConfirmar_(g), { asunto: 'Hoy tenés guardia' });
+      avisar_(m, texto + '.', esSoloReemplazo_(m) ? botonesReemplazoSolo_(g) : botonesConfirmar_(g), { asunto: 'Hoy tenés guardia' });
     } else {
       const titular = g.medico_titular_id ? ': cubrís a ' + nombreDe_(g.medico_titular_id) : ': puesto vacante';
       avisar_(m, texto + titular + '. ¿La hacés?', botonesSiNo_(g), { asunto: 'Hoy tenés guardia' });

@@ -173,6 +173,7 @@ function apiMedicos_() {
       return {
         id: m.id, nombre: m.nombre_apellido, email: m.email, activo: esSi_(m.activo), baja: m.activo === ESTADO_BAJA, admin: esSi_(m.es_admin),
         telegram: !!m.telegram_chat_id, pin_pendiente: /^\d{4}$/.test(m.pin),
+        vinculo: vinculoDe_(m), registro_completo: registroCompleto_(m) && tienePinPropio_(m),
         fijas: fijas.filter(function (f) { return f.medico_id === m.id; }).map(function (f) {
           return { dia_semana: normalizarDia_(f.dia_semana), turno: f.turno, tipo: f.tipo || TIPO.CONTRATO };
         })
@@ -209,9 +210,11 @@ function apiGuardarMedico_(jefe, a) {
     if (d.admin !== undefined) m.es_admin = !!d.admin;
     if (d.pin) {
       m.pin = hashPin_(m.id, String(d.pin));
+      m.pin_propio = false; // al entrar tiene que elegir uno propio
       setPropiedad_('pin_' + m.id, '{}');
     }
     guardar_('MEDICOS', m);
+    if (d.vinculo) cambiarVinculo_(m, d.vinculo, jefe.nombre_apellido);
     // Mientras estuvo inactivo no se le crearon guardias: al activarlo, desde hoy en adelante.
     if (!estabaActivo && esSi_(m.activo)) sembrarDesdeHoy_(m.id);
   } else {
@@ -219,7 +222,8 @@ function apiGuardarMedico_(jefe, a) {
     const id = siguienteId_('MEDICOS');
     m = insertar_('MEDICOS', {
       id: id, nombre_apellido: nombre, pin: hashPin_(id, String(d.pin)), email: String(d.email || ''),
-      telegram_chat_id: '', activo: true, es_admin: !!d.admin
+      telegram_chat_id: '', activo: true, es_admin: !!d.admin, vinculo: d.vinculo === VINCULO.SOLO ? VINCULO.SOLO : VINCULO.CONTRATO,
+      pin_propio: false, contrato_revisado: false
     });
   }
   registrar_(jefe.nombre_apellido, d.id ? 'editar_medico' : 'alta_medico', nombre);

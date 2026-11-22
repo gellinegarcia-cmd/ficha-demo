@@ -80,7 +80,7 @@ function procesarTexto_(msg) {
   const inicio = msg.text.match(/^\/start\s+(\S+)/);
   if (inicio) return vincularChat_(chat, inicio[1]);
   const m = medicoPorChat_(chat);
-  if (!m) return enviarTelegram_(chat, 'Este chat no está vinculado. Entrá a la app, abrí "Mi contrato" y tocá "Vincular Telegram".');
+  if (!m) return enviarTelegram_(chat, 'Este chat no está vinculado. Entrá a la app, abrí "Mi perfil" y tocá "Vincular Telegram".');
   enviarTelegram_(chat, 'Te aviso cuando tengas algo para confirmar. Para ver tu mes o cargar un reemplazo:\n\n' + REGLA_ORO,
     [[botonVista_('Abrir la app', 'mes')], [botonVista_('+ Cargar guardia', 'cargar')]]);
 }
@@ -99,8 +99,9 @@ function vincularChat_(chat, codigo) {
     registrar_(m.nombre_apellido, 'vinculo_telegram', '');
   });
   enviarTelegram_(chat, 'Listo, ' + m.nombre_apellido + '. Desde ahora te aviso por acá.\n\n' + REGLA_ORO);
+  // La guardia fija se carga en el registro. Solo se pregunta acá si ya se registró con contrato y le falta.
   const tiene = fijasVigentes_().some(function (f) { return f.medico_id === m.id; });
-  if (!tiene) enviarTelegram_(chat, '¿Cuál es tu guardia de contrato?', tecladoContratoInicial_());
+  if (!tiene && registroCompleto_(m) && !esSoloReemplazo_(m)) enviarTelegram_(chat, '¿Cuál es tu guardia de contrato?', tecladoContratoInicial_());
 }
 
 const DIAS_CORTOS = { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb', 0: 'Dom' };

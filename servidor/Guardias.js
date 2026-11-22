@@ -724,18 +724,6 @@ function confirmarContrato_(m) {
   registrar_(m.nombre_apellido, 'contrato_revisado', '');
 }
 
-// Desde Telegram solo se elige el contrato: los reemplazos fijos se mantienen.
-function cambiarContrato_(m, filas) {
-  const fijos = fijasVigentes_().filter(function (f) { return f.medico_id === m.id && f.tipo === TIPO.HOSPITAL; })
-    .map(function (f) { return { dia_semana: f.dia_semana, turno: f.turno, tipo: TIPO.HOSPITAL }; });
-  guardarFija_(m.id, fijos.concat(filas.map(function (f) { return { dia_semana: f.dia_semana, turno: f.turno, tipo: TIPO.CONTRATO }; })));
-  registrar_(m.nombre_apellido, 'guardar_fija', textoContrato_(filas));
-}
-
-function textoContrato_(filas) {
-  return filas.map(function (f) { return f.dia_semana + ' ' + TURNOS[f.turno].nombre; }).join(' + ');
-}
-
 // --- Deudas ---
 
 function recibiPago_(m, deudaId) {

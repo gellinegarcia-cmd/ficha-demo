@@ -1,6 +1,7 @@
 // Acceso a la Google Sheet: cada hoja es una tabla. Todo se guarda como texto para que
 // Sheets no convierta fechas ni PINs (ej.: un PIN 0123 quedaría 123).
 
+// MEDICOS.telegram_chat_id quedó sin uso (los avisos son push + mail): no se borra para no mover columnas.
 const ESQUEMA = {
   MEDICOS: ['id', 'nombre_apellido', 'pin', 'email', 'telegram_chat_id', 'activo', 'es_admin', 'contrato_revisado', 'vinculo', 'pin_propio', 'registro'],
   GUARDIA_FIJA: ['medico_id', 'dia_semana', 'turno', 'tipo', 'vigente'],
@@ -13,6 +14,7 @@ const ESQUEMA = {
   CONFIG: ['clave', 'valor', 'para_que_sirve'],
   AJUSTES: ['id', 'guardia_id', 'medico_id', 'fecha_guardia', 'mes_origen', 'mes_aviso', 'motivo', 'estado', 'creado_en'],
   CIERRES: ['mes', 'estado', 'cerrado_en', 'entregado_en', 'filas_excel', 'archivo_url', 'correcciones', 'regeneracion_pendiente'],
+  PUSH: ['id', 'medico_id', 'token', 'plataforma', 'creado_en', 'ultimo_ok', 'estado'],
   LOG: ['fecha_hora', 'usuario', 'accion', 'detalle', 'tabla', 'registro', 'valor_anterior', 'valor_nuevo']
 };
 

@@ -90,7 +90,10 @@ function tablaApi_() {
     inicio: { registro: 1, f: apiInicio_ },
     registroPin: { registro: 1, e: 1, f: function (m, a) { return crearPinPropio_(m, a[0]); } },
     registroGuardar: { registro: 1, e: 1, f: function (m, a) { if (!tienePinPropio_(m)) throw new ErrorUsuario('Primero creá tu PIN.'); return guardarBorrador_(m, a[0]); } },
-    registroResumen: { registro: 1, f: function (m) { return { resumen: resumenRegistro_(m, limpiarBorrador_(borradorDe_(m))), telegram: !!m.telegram_chat_id }; } },
+    registroResumen: { registro: 1, f: function (m) { return { resumen: resumenRegistro_(m, limpiarBorrador_(borradorDe_(m))), push: pushActivo_(m) }; } },
+    guardarPush: { registro: 1, e: 1, f: function (m, a) { guardarPush_(m, a[0], a[1]); return { push: true }; } },
+    pushPrueba: { registro: 1, f: function (m) { return pushPrueba_(m); } },
+    quitarPush: { e: 1, f: function (m) { quitarPush_(m); return { push: false }; } },
     registroConfirmar: { registro: 1, e: 1, f: function (m) { return confirmarRegistro_(m); } },
     miMes: { f: apiMiMes_ },
     guardia: { f: apiGuardia_ },
@@ -135,6 +138,21 @@ function tablaApi_() {
   };
 }
 
+// La app en GitHub Pages llama acá con POST (texto JSON: { f, args }). Responde JSON: { r }.
+// Solo estas funciones; todo lo demás pasa por api(), que exige sesión.
+function doPost(e) {
+  let r;
+  try {
+    const p = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    const rutas = { api: api, login: login, medicosPublico: medicosPublico, accionAviso: accionAviso_ };
+    const a = Array.isArray(p.args) ? p.args : [];
+    r = Object.prototype.hasOwnProperty.call(rutas, p.f) ? rutas[p.f].apply(null, a) : { ok: false, error: 'Pedido desconocido.' };
+  } catch (err) {
+    r = { ok: false, error: 'Pedido inválido.' };
+  }
+  return ContentService.createTextOutput(JSON.stringify({ r: r === undefined ? null : r })).setMimeType(ContentService.MimeType.JSON);
+}
+
 function api(token, metodo, args) {
   reiniciarEstado_();
   try {
@@ -159,11 +177,11 @@ function api(token, metodo, args) {
 function apiInicio_(m) {
   const hoyStr = hoy_();
   return {
-    yo: { id: m.id, nombre: m.nombre_apellido, admin: esSi_(m.es_admin), telegram: !!m.telegram_chat_id, enlace_telegram: m.telegram_chat_id ? '' : enlaceVinculo_(m.id),
+    yo: { id: m.id, nombre: m.nombre_apellido, admin: esSi_(m.es_admin), push: pushActivo_(m), push_listo: pushConfigurado_(),
       vinculo: vinculoDe_(m), email: m.email || '' },
     hoy: hoyStr,
     registro: tienePinPropio_(m) && registroCompleto_(m) ? null : estadoRegistro_(m),
-    recordar_avisos: registroCompleto_(m) && !m.telegram_chat_id && !m.email,
+    recordar_avisos: registroCompleto_(m) && !pushActivo_(m) && !m.email,
     dias: DIAS.slice(1).concat(DIAS[0]),
     fijas: fijasVigentes_().filter(function (f) { return f.medico_id === m.id; }).map(function (f) {
       return { dia_semana: normalizarDia_(f.dia_semana), turno: TURNOS[f.turno] ? TURNOS[f.turno].nombre : f.turno, tipo: f.tipo || TIPO.CONTRATO };
@@ -322,8 +340,8 @@ function apiContrato_(m) {
   return {
     vinculo: vinculoDe_(m),
     email: m.email || '',
-    telegram: !!m.telegram_chat_id,
-    enlace_telegram: m.telegram_chat_id ? '' : enlaceVinculo_(m.id),
+    push: pushActivo_(m),
+    push_listo: pushConfigurado_(),
     filas: fijasVigentes_().filter(function (f) { return f.medico_id === m.id; }).map(function (f) {
       return { dia_semana: normalizarDia_(f.dia_semana), turno: f.turno, tipo: f.tipo || TIPO.CONTRATO };
     }),

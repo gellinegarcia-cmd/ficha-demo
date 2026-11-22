@@ -1,5 +1,5 @@
-// Mensajes a los médicos: Telegram si está vinculado, y mail como respaldo.
-// Un botón puede tener "data" (acción de Telegram) y/o "vista" (abre esa pantalla de la app).
+// Mensajes a los médicos: aviso push si lo activó, y mail como respaldo (si el push falla o no lo activó).
+// Un botón puede tener "data" (acción que se ejecuta desde la notificación) y/o "vista" (abre esa pantalla de la app).
 
 function urlApp_() {
   const c = cfg_('url_app');
@@ -21,12 +21,11 @@ function avisar_(medico, texto, botones, op) {
   op = op || {};
   const completo = op.sinRegla ? texto : texto + '\n\n' + REGLA_ORO;
   let entregado = false;
-  if (medico.telegram_chat_id && tokenTelegram_()) {
+  if (pushActivo_(medico)) {
     try {
-      enviarTelegram_(medico.telegram_chat_id, completo, botones);
-      entregado = true;
+      entregado = enviarPushA_(medico, op.asunto || 'Guardias UPA', texto, botones);
     } catch (e) {
-      registrar_('sistema', 'error_telegram', medico.nombre_apellido + ': ' + e.message);
+      registrar_('sistema', 'error_push', medico.nombre_apellido + ': ' + e.message);
     }
   }
   if (!entregado && medico.email) {
@@ -59,19 +58,19 @@ function enviarMailAviso_(para, asunto, texto, botones) {
   MailApp.sendEmail({ to: para, subject: asunto, body: texto, htmlBody: html + '</div>', name: 'Guardias UPA' });
 }
 
+// [La hice] confirma desde la notificación; [Me cubrieron] abre la guardia para elegir quién.
 function botonesConfirmar_(g) {
   return [
-    [{ texto: 'La hago yo', data: 'H:' + g.id, vista: 'confirmar', g: g.id, textoMail: 'Responder en la app' }],
-    [{ texto: 'Me cubre un compañero', data: 'C:' + g.id, vista: 'confirmar', g: g.id }],
-    [{ texto: 'Me cubre el hospital (reemplazo)', data: 'R:' + g.id, vista: 'confirmar', g: g.id }]
+    [{ texto: 'La hice', data: 'H:' + g.id, vista: 'confirmar', g: g.id, textoMail: 'Responder en la app' }],
+    [{ texto: 'Me cubrieron', vista: 'confirmar', g: g.id }]
   ];
 }
 
 // Médico de reemplazos: nadie lo cubre. Si no lo hace, lo anula desde la app.
 function botonesReemplazoSolo_(g) {
   return [
-    [{ texto: 'La hago yo', data: 'H:' + g.id, vista: 'confirmar', g: g.id, textoMail: 'Responder en la app' }],
-    [{ texto: 'No la hago (abrir la app)', vista: 'confirmar', g: g.id }]
+    [{ texto: 'La hice', data: 'H:' + g.id, vista: 'confirmar', g: g.id, textoMail: 'Responder en la app' }],
+    [{ texto: 'No la hago', vista: 'confirmar', g: g.id }]
   ];
 }
 

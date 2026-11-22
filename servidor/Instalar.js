@@ -125,8 +125,7 @@ function soloDueno_() {
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('Guardias UPA')
     .addItem('1. Instalar', 'instalar')
-    .addItem('2. Conectar Telegram', 'conectarTelegram')
-    .addItem('Revisar Telegram', 'revisarTelegram')
+    .addItem('2. Configurar avisos push', 'configurarPush')
     .addSeparator()
     .addItem('Ver dirección de la app', 'verDireccionApp')
     .addItem('Probar: mandarme el Excel de este mes', 'probarExcelDelMes')

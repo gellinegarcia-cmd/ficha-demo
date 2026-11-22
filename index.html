@@ -79,19 +79,24 @@
   .opciones.dias button { flex: 1 0 calc(25% - 6px); }
   button.verde { background: #17602d; border-color: #17602d; color: #fff; }
   .bloque { border-top: 1px solid #edf0f4; padding-top: 10px; margin-top: 10px; }
+  .pasos-ios { list-style: none; padding: 0; margin: 0; }
+  .pasos-ios li { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid #edf0f4; }
+  .pasos-ios li:last-child { border-bottom: none; }
+  .pasos-ios img { width: 120px; height: 84px; flex-shrink: 0; border-radius: 10px; border: 1px solid var(--borde); background: #fff; }
 </style>
 </head>
 <body><div id="demo-cartel" style="background:#b45309;color:#fff;padding:8px 12px;font:600 14px/1.35 system-ui,Arial,sans-serif;text-align:center">
   DEMO — datos de prueba
-  <div style="font-weight:400;font-size:12px;margin-top:2px">Todos los PIN: 1111 · Jefe: JAVIER GARCIA · PAULA RIOS: registro desde cero · SOFIA LUNA: solo reemplazos · No usa la planilla real ni manda mensajes</div>
+  <div style="font-weight:400;font-size:12px;margin-top:2px">Todos los PIN: 1111 · Jefe: JAVIER GARCIA · PAULA RIOS: registro desde cero · SOFIA LUNA: solo reemplazos · Los avisos se ven acá arriba (simulados): no usa la planilla real ni manda mensajes</div>
   <div style="margin-top:6px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
-    <button type="button" id="demo-mensajes" style="font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer">Mensajes simulados</button>
+    <button type="button" id="demo-recordatorio" style="font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer">Simular el aviso de las 8:00</button>
+    <button type="button" id="demo-mensajes" style="font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer">Avisos y mails enviados</button>
     <button type="button" id="demo-reiniciar" style="font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer">Reiniciar demo</button>
   </div>
 </div>
 <div id="demo-panel" hidden style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);overflow:auto;padding:16px;box-sizing:border-box">
   <div style="background:#fff;border-radius:12px;max-width:460px;margin:0 auto;padding:14px;font:14px/1.4 system-ui,Arial,sans-serif;color:#1a1a1a">
-    <div style="display:flex;justify-content:space-between;align-items:center"><b>Mensajes que mandaría la app</b>
+    <div style="display:flex;justify-content:space-between;align-items:center"><b>Avisos y mails que mandaría la app</b>
       <button type="button" id="demo-cerrar" style="font:inherit;padding:6px 12px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer">Cerrar</button></div>
     <div id="demo-lista" style="margin-top:10px"></div>
   </div>
@@ -102,15 +107,21 @@
   document.getElementById('demo-reiniciar').onclick = async () => {
     (await window.demoServidor()).demoReiniciar();
     try { Object.keys(localStorage).forEach((k) => { if (/guardia/i.test(k)) localStorage.removeItem(k); }); } catch (e) {}
+    try { sessionStorage.removeItem('guardias-demo-instalada'); } catch (e) {}
     location.href = location.pathname;
+  };
+  document.getElementById('demo-recordatorio').onclick = async () => {
+    const s = await window.demoServidor();
+    s.demoRecordatorio();
+    window.demoAvisosNuevos(s);
   };
   document.getElementById('demo-cerrar').onclick = () => { document.getElementById('demo-panel').hidden = true; };
   document.getElementById('demo-mensajes').onclick = async () => {
     const m = (await window.demoServidor()).demoMensajes();
-    const tg = m.telegram.map((t) => '<div style="background:#eef6ea;border-radius:10px;padding:8px 10px;margin:8px 0"><div style="font-size:12px;color:#555">Telegram a ' + esc(t.a) + '</div>' +
-      esc(t.texto).replace(/\n/g, '<br>') + (t.botones.length ? '<div style="margin-top:6px;font-size:12px;color:#335">Botones: ' + t.botones.map((f) => f.map(esc).join(' | ')).join(' / ') + '</div>' : '') + '</div>').join('');
-    const ml = m.mails.map((x) => '<div style="background:#f1f3f4;border-radius:10px;padding:8px 10px;margin:8px 0"><div style="font-size:12px;color:#555">Mail a ' + esc(x.a) + '</div><b>' + esc(x.asunto) + '</b><br>' + esc(x.cuerpo).replace(/\n/g, '<br>') + '</div>').join('');
-    document.getElementById('demo-lista').innerHTML = (tg + ml) || '<p>Todavía no se generó ningún mensaje.</p>';
+    const ps = m.push.slice().reverse().map((p) => '<div style="background:#eaf1fb;border-radius:10px;padding:8px 10px;margin:8px 0"><div style="font-size:12px;color:#555">Aviso push a ' + esc(p.a) + '</div><b>' +
+      esc(p.titulo) + '</b><br>' + esc(p.cuerpo) + (p.acciones.length ? '<div style="margin-top:6px;font-size:12px;color:#335">Botones: ' + p.acciones.map((a) => esc(a.titulo) + (a.firma ? ' (confirma sin abrir)' : ' (abre la app)')).join(' · ') + '</div>' : '') + '</div>').join('');
+    const ml = m.mails.slice().reverse().map((x) => '<div style="background:#f1f3f4;border-radius:10px;padding:8px 10px;margin:8px 0"><div style="font-size:12px;color:#555">Mail a ' + esc(x.a) + '</div><b>' + esc(x.asunto) + '</b><br>' + esc(x.cuerpo).replace(/\n/g, '<br>') + '</div>').join('');
+    document.getElementById('demo-lista').innerHTML = (ps + ml) || '<p>Todavía no se mandó ningún aviso.</p>';
     document.getElementById('demo-panel').hidden = false;
   };
 })();
@@ -121,6 +132,7 @@
 <nav id="nav" hidden></nav>
 <script>
 // DEMO: google.script.run llama al simulador que corre en un marco oculto (servidor.html).
+// Los avisos push se simulan: aparecen arriba de la pantalla como una notificación, con sus botones.
 (function () {
   const marco = document.createElement('iframe');
   marco.src = 'servidor.html';
@@ -129,20 +141,78 @@
   const listo = new Promise((res) => marco.addEventListener('load', () => res(marco.contentWindow)));
   document.documentElement.appendChild(marco);
   window.demoServidor = () => listo;
-  // En la demo no hay bot: "Vincular Telegram" simula la vinculación en vez de abrir Telegram.
-  document.addEventListener('click', (ev) => {
-    const a = ev.target.closest && ev.target.closest('a[href^="https://t.me/"]');
-    if (!a) return;
-    ev.preventDefault();
-    const codigo = new URL(a.href).searchParams.get('start');
-    listo.then((s) => { s.demoVincularTelegram(codigo); alert('DEMO: Telegram quedó vinculado (simulado). Tocá "Ya lo vinculé".'); });
-  }, true);
+  let vistos = 0;
+  listo.then((s) => { vistos = s.demoPush(0).length; });
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const lsLeer = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const ssLeer = (k) => { try { return sessionStorage.getItem(k); } catch (e) { return null; } };
+  const quien = () => (lsLeer('guardias_upa_sesion') || '').split('.')[0];
+  window.GuardiasPush = {
+    demo: true,
+    soportado: () => true,
+    instalada: () => !ios || ssLeer('guardias-demo-instalada') === '1',
+    simularInstalacion: () => { try { sessionStorage.setItem('guardias-demo-instalada', '1'); } catch (e) {} },
+    async activar() {
+      let t = lsLeer('guardias-demo-celular');
+      if (!t) { t = 'demo-este-celular-' + Math.random().toString(36).slice(2) + 'x'.repeat(12); try { localStorage.setItem('guardias-demo-celular', t); } catch (e) {} }
+      return { token: t, plataforma: ios ? 'ios' : /Android/.test(navigator.userAgent) ? 'android' : 'otro' };
+    }
+  };
+  // Notificación simulada (como la de Android: en iPhone no se ven los botones, tocar abre la app).
+  window.demoNotificar = function (p, s) {
+    let caja = document.getElementById('demo-noti');
+    if (!caja) {
+      caja = document.createElement('div');
+      caja.id = 'demo-noti';
+      caja.style.cssText = 'position:fixed;top:8px;left:8px;right:8px;max-width:460px;margin:0 auto;z-index:9998;display:flex;flex-direction:column;gap:6px';
+      document.body.appendChild(caja);
+    }
+    const n = document.createElement('div');
+    n.className = 'demo-noti';
+    n.style.cssText = 'background:#fff;border-radius:16px;box-shadow:0 6px 24px rgba(0,0,0,.25);padding:10px 12px;font:14px/1.35 system-ui,Arial,sans-serif;color:#1c2733;cursor:pointer';
+    const cab = document.createElement('div');
+    cab.style.cssText = 'font-size:12px;color:#5b6876;margin-bottom:2px';
+    cab.textContent = '🔔 Guardias UPA · ahora · (aviso simulado)';
+    const t = document.createElement('b'); t.textContent = p.titulo;
+    const c = document.createElement('div'); c.textContent = p.cuerpo;
+    n.append(cab, t, c);
+    const cerrar = () => n.remove();
+    n.onclick = () => { cerrar(); location.href = p.url; };
+    if (p.acciones.length) {
+      const fila = document.createElement('div');
+      fila.style.cssText = 'display:flex;gap:16px;margin-top:8px';
+      p.acciones.forEach((a) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'demo-noti-accion';
+        b.textContent = a.titulo;
+        b.style.cssText = 'font:600 14px system-ui,Arial,sans-serif;color:#1a56a8;background:none;border:none;padding:6px 0;cursor:pointer';
+        b.onclick = (ev) => {
+          ev.stopPropagation();
+          cerrar();
+          if (!a.firma) { location.href = a.url; return; }
+          const r = s.demoAccion(a.firma);
+          window.demoNotificar({ titulo: 'Guardias UPA', cuerpo: r.ok ? r.texto : r.error, url: p.url, acciones: [] }, s);
+          if (typeof window.ir === 'function') window.ir('mes');
+        };
+        fila.appendChild(b);
+      });
+      n.appendChild(fila);
+    }
+    caja.appendChild(n);
+    setTimeout(cerrar, 15000);
+  };
+  window.demoAvisosNuevos = function (s) {
+    const nuevos = s.demoPush(vistos);
+    vistos += nuevos.length;
+    nuevos.filter((p) => p.medico_id && p.medico_id === quien()).forEach((p) => window.demoNotificar(p, s));
+  };
   window.google = { script: { get run() {
     const crear = (ok, mal) => new Proxy({}, { get(_, k) {
       if (k === 'withSuccessHandler') return (f) => crear(f, mal);
       if (k === 'withFailureHandler') return (f) => crear(ok, f);
       return (...args) => listo
-        .then((s) => new Promise((r) => setTimeout(r, 80)).then(() => s.demoLlamar(k, args)))
+        .then((s) => new Promise((r) => setTimeout(r, 80)).then(() => { const d = s.demoLlamar(k, args); setTimeout(() => window.demoAvisosNuevos(s), 0); return d; }))
         .then((d) => ok && ok(d))
         .catch((e) => mal && mal({ message: e && e.message ? e.message : String(e) }));
     } });
@@ -311,7 +381,7 @@ function regAccion(fn) {
   return async (ev) => {
     const b = ev && ev.currentTarget;
     if (b) b.disabled = true;
-    try { await fn(); } catch (e) { aviso = { texto: e.message, error: true }; pasoRegistro(); }
+    try { await fn(); } catch (e) { aviso = { texto: e.message, error: true }; if (reg && datos.registro) pasoRegistro(); else ir(vista); }
   };
 }
 async function avanzar(paso) {
@@ -422,17 +492,66 @@ function regVacaciones() {
   pintar(nodos);
 }
 
+// --- Avisos en el celular (push), con el mail como respaldo ---
+// window.GuardiasPush lo pone la app instalable (GitHub Pages) o la demo. Sin él (app abierta desde
+// Apps Script) no se pueden activar los avisos en el celular.
+const PUSH = window.GuardiasPush || null;
+function plataforma() {
+  const ua = navigator.userAgent || '';
+  return /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? 'ios' : /Android/.test(ua) ? 'android' : 'otro';
+}
+function instalada() {
+  if (PUSH && PUSH.instalada) return PUSH.instalada();
+  return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+}
+const svgImg = (svg, alt) => el('img', { src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg), alt: alt });
+const IMG_COMPARTIR = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 84"><rect width="120" height="84" fill="#f2f2f7"/><rect x="0" y="54" width="120" height="30" fill="#fff" stroke="#d1d1d6"/><g fill="none" stroke="#8e8e93" stroke-width="2.5" stroke-linecap="round"><path d="M14 69l6-6m-6 6l6 6"/><path d="M106 69l-6-6m6 6l-6 6"/></g><circle cx="60" cy="69" r="14" fill="#dbe7ff"/><g fill="none" stroke="#007aff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M54 66v9h12v-9"/><path d="M60 58v12"/><path d="M56 62l4-4 4 4"/></g><text x="60" y="30" font-family="Arial" font-size="12" fill="#333" text-anchor="middle">Safari, abajo</text></svg>';
+const IMG_AGREGAR = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 84"><rect width="120" height="84" fill="#f2f2f7"/><rect x="6" y="22" width="108" height="40" rx="8" fill="#fff" stroke="#d1d1d6"/><text x="12" y="39" font-family="Arial" font-size="10" fill="#111">Agregar a</text><text x="12" y="52" font-family="Arial" font-size="10" fill="#111">pantalla de inicio</text><rect x="94" y="33" width="15" height="15" rx="3.5" fill="none" stroke="#111" stroke-width="1.8"/><path d="M101.5 36.5v8M97.5 40.5h8" stroke="#111" stroke-width="1.8" stroke-linecap="round"/></svg>';
+const IMG_ICONO = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 84"><rect width="120" height="84" fill="#9db8d9"/><rect x="42" y="14" width="36" height="36" rx="9" fill="#1a56a8"/><rect x="51" y="23" width="18" height="16" rx="2.5" fill="#fff"/><rect x="51" y="23" width="18" height="5" rx="2" fill="#cfe0f7"/><path d="M55 32l3 3 6-6.5" fill="none" stroke="#17602d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><text x="60" y="66" font-family="Arial" font-size="10" fill="#fff" text-anchor="middle">Guardias UPA</text></svg>';
+
+// Bloque de avisos. alCambiar() vuelve a dibujar la pantalla que lo usa.
+function bloqueAvisos(alCambiar, enPerfil) {
+  const yo = datos.yo;
+  const nodos = [];
+  const activar = (ev) => regAccion(async () => {
+    const r = await PUSH.activar();
+    await llamar('guardarPush', r.token, r.plataforma || plataforma());
+    yo.push = true;
+    datos.recordar_avisos = false;
+    try { await llamar('pushPrueba'); aviso = { texto: 'Listo: los avisos están activos. Te mandamos un aviso de prueba. ¿Te llegó?' }; }
+    catch (e) { aviso = { texto: 'Los avisos quedaron activos, pero la prueba no salió: ' + e.message, error: true }; }
+    alCambiar();
+  })(ev);
+  if (yo.push) {
+    nodos.push(el('div', { class: 'ok', id: 'push-activo' }, 'Avisos activos en este celular ✓'),
+      el('button', { class: 'chico', id: 'push-prueba', onclick: regAccion(async () => { await llamar('pushPrueba'); aviso = { texto: 'Te mandamos un aviso de prueba.' }; alCambiar(); }) }, 'Mandar un aviso de prueba'),
+      enPerfil ? el('button', { class: 'chico', onclick: regAccion(async () => { await llamar('quitarPush'); yo.push = false; aviso = { texto: 'Avisos en el celular desactivados.' }; alCambiar(); }) }, 'Desactivar') : null);
+  } else if (!yo.push_listo || !PUSH || !PUSH.soportado()) {
+    nodos.push(el('div', { class: 'regla' }, !yo.push_listo ? 'Los avisos en el celular todavía no están listos. Mientras tanto te avisamos por mail.'
+      : 'Para recibir avisos en el celular, abrí la app instalada (la de la pantalla de inicio). Mientras tanto te avisamos por mail.'));
+  } else if (plataforma() === 'ios' && !instalada()) {
+    nodos.push(el('p', { style: 'margin-top:0' }, 'En iPhone, primero agregá la app a la pantalla de inicio (desde Safari):'),
+      el('ol', { class: 'pasos-ios' },
+        el('li', null, svgImg(IMG_COMPARTIR, 'Botón Compartir de Safari'), el('span', null, el('b', null, '1. '), 'Tocá el botón ', el('b', null, 'Compartir'), ' (el cuadrado con la flecha hacia arriba).')),
+        el('li', null, svgImg(IMG_AGREGAR, 'Opción Agregar a pantalla de inicio'), el('span', null, el('b', null, '2. '), 'Bajá y tocá ', el('b', null, 'Agregar a pantalla de inicio'), '. Después, ', el('b', null, 'Agregar'), '.')),
+        el('li', null, svgImg(IMG_ICONO, 'Ícono de Guardias UPA en la pantalla de inicio'), el('span', null, el('b', null, '3. '), 'Abrí ', el('b', null, 'Guardias UPA'), ' desde ese ícono, volvé a este paso y tocá ', el('b', null, 'Activar avisos'), '.'))),
+      el('p', { class: 'suave' }, 'Necesitás iOS 16.4 o más nuevo. Lo que ya cargaste queda guardado.'),
+      PUSH.simularInstalacion ? el('button', { class: 'chico', id: 'push-simular-ios', onclick: () => { PUSH.simularInstalacion(); alCambiar(); } }, 'DEMO: simular que ya la agregué') : null);
+  } else {
+    nodos.push(el('button', { class: 'grande', id: 'push-activar', onclick: activar }, 'Activar avisos'),
+      el('p', { class: 'suave' }, 'El celular te va a preguntar si permitís notificaciones: tocá ', el('b', null, 'Permitir'), '.'));
+  }
+  return nodos;
+}
+
 function regAvisos() {
   const b = reg.b;
   const email = el('input', { id: 'r-email', type: 'email', value: b.email || datos.yo.email || '', placeholder: 'tu@mail.com' });
-  const revisar = regAccion(async () => { datos = await llamar('inicio'); pasoRegistro(); });
-  const tg = datos.yo.telegram ? el('div', { class: 'ok' }, 'Telegram vinculado ✓')
-    : datos.yo.enlace_telegram ? [el('a', { class: 'grande', id: 'r-telegram', href: datos.yo.enlace_telegram, target: '_blank', rel: 'noopener' }, 'Vincular Telegram'),
-      el('button', { class: 'chico', onclick: revisar }, 'Ya lo vinculé')]
-      : el('div', { class: 'regla' }, 'El aviso por Telegram todavía no está listo. Lo vas a poder activar después desde Mi perfil.');
   pintar(progreso(4), bloqueAviso(), el('h2', null, '¿Cómo te avisamos?'),
-    el('p', { class: 'suave' }, 'Te mandamos un recordatorio el día de cada guardia, para que la confirmes con un toque.'),
-    el('div', { class: 'tarjeta' }, tg, el('label', { htmlFor: 'r-email' }, 'Mail (opcional)'), email),
+    el('p', { class: 'suave' }, 'Te mandamos un aviso el día de cada guardia, para que la confirmes con un toque.'),
+    el('div', { class: 'tarjeta' }, bloqueAvisos(() => { b.email = email.value.trim(); regAvisos(); })),
+    el('div', { class: 'tarjeta' }, el('label', { htmlFor: 'r-email', style: 'margin-top:0' }, 'Tu mail (respaldo)'), email,
+      el('p', { class: 'suave', style: 'margin-bottom:0' }, 'Si el aviso no llega al celular, te escribimos acá.')),
     el('button', { class: 'grande', id: 'r-siguiente', onclick: regAccion(async () => { b.email = email.value.trim(); await avanzar('5'); }) }, 'Siguiente'),
     el('button', { class: 'grande sec', onclick: regAccion(async () => { b.email = ''; await avanzar('5'); }) }, 'Saltar este paso'),
     el('button', { class: 'grande sec', onclick: regAccion(() => avanzar('3v')) }, 'Atrás'));
@@ -509,8 +628,7 @@ async function verMes() {
     navMes(d.titulo, verMes),
     el('div', { class: 'cal' }, celdas),
     el('div', { class: 'leyenda' }, leyenda.map(([c, t]) => el('span', { class: 'c-' + c }, t))),
-    d.guardias.length ? el('div', null, el('h3', null, 'Mis guardias del mes'), d.guardias.map((g) => filaGuardia(g))) : null,
-    datos.yo.telegram || !datos.yo.enlace_telegram ? null : el('a', { class: 'grande', href: datos.yo.enlace_telegram, target: '_blank', rel: 'noopener' }, 'Recibir avisos por Telegram')
+    d.guardias.length ? el('div', null, el('h3', null, 'Mis guardias del mes'), d.guardias.map((g) => filaGuardia(g))) : null
   );
 }
 function textoCobertura(g) {
@@ -802,6 +920,8 @@ async function verContrato() {
   const filas = c.filas.map((f) => Object.assign({}, f));
   const solo = c.vinculo === 'SOLO_REEMPLAZO';
   datos.yo.vinculo = c.vinculo;
+  datos.yo.push = c.push;
+  datos.yo.push_listo = c.push_listo;
   let pedido = null;
   const zonaVinculo = el('div');
   const pintarVinculo = () => zonaVinculo.replaceChildren(
@@ -820,10 +940,9 @@ async function verContrato() {
       editorFija(filas, c.dias, c.turnos, solo), el('br'), el('br'),
       el('button', { class: 'grande', onclick: accion(async () => { await llamar('guardarMiFija', filas); aviso = { texto: solo ? 'Reemplazos fijos guardados.' : 'Guardia fija guardada.' }; verContrato(); }) }, 'Guardar')),
     el('div', { class: 'tarjeta' }, el('h3', { style: 'margin-top:0' }, 'Avisos'),
-      c.telegram ? el('div', { class: 'ok' }, 'Telegram vinculado.') : c.enlace_telegram ? el('a', { class: 'grande', href: c.enlace_telegram, target: '_blank', rel: 'noopener' }, 'Vincular Telegram')
-        : el('div', { class: 'suave' }, 'El aviso por Telegram todavía no está listo.'),
-      el('label', { htmlFor: 'p-email' }, 'Mail (opcional)'), email, el('br'), el('br'),
-      el('button', { class: 'grande sec', onclick: accion(async () => { await llamar('guardarMiEmail', email.value); datos.yo.email = email.value.trim(); datos.recordar_avisos = !c.telegram && !datos.yo.email; aviso = { texto: 'Mail guardado.' }; verContrato(); }) }, 'Guardar mail')),
+      bloqueAvisos(() => verContrato(), true),
+      el('label', { htmlFor: 'p-email' }, 'Mail (respaldo)'), email, el('br'), el('br'),
+      el('button', { class: 'grande sec', onclick: accion(async () => { await llamar('guardarMiEmail', email.value); datos.yo.email = email.value.trim(); datos.recordar_avisos = !datos.yo.push && !datos.yo.email; aviso = { texto: 'Mail guardado.' }; verContrato(); }) }, 'Guardar mail')),
     bloquePin());
 }
 function bloquePin() {
@@ -958,7 +1077,8 @@ function tarjetaMedico(m, d) {
   const admin = el('input', { type: 'checkbox', checked: m.admin });
   const filas = m.fijas.map((f) => Object.assign({}, f));
   return el('details', { class: 'tarjeta' },
-    el('summary', null, el('b', null, m.nombre), m.baja ? ' (baja)' : m.activo ? '' : ' (inactivo)', m.admin ? ' · administrador' : '', m.telegram ? ' · Telegram' : '', m.vinculo === 'SOLO_REEMPLAZO' ? ' · solo reemplazos' : '',
+    el('summary', null, el('b', null, m.nombre), m.baja ? ' (baja)' : m.activo ? '' : ' (inactivo)', m.admin ? ' · administrador' : '', m.vinculo === 'SOLO_REEMPLAZO' ? ' · solo reemplazos' : '',
+      el('span', { class: 'suave', 'data-avisos': m.avisos }, ' · Avisos activos: ' + m.avisos),
       el('span', { class: 'suave', 'data-registro': m.registro_completo ? 'si' : 'no' }, ' · Registro completo: ' + (m.registro_completo ? 'Sí' : 'No'))),
     el('label', null, 'Nombre (como va a RRHH)'), nombre, el('label', null, 'Mail'), email, el('label', null, 'PIN'), pin,
     m.pin_pendiente ? el('div', { class: 'suave' }, 'Todavía no entró por primera vez.') : null,

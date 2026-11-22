@@ -172,7 +172,7 @@ function apiMedicos_() {
     medicos: medicos_(true).map(function (m) {
       return {
         id: m.id, nombre: m.nombre_apellido, email: m.email, activo: esSi_(m.activo), baja: m.activo === ESTADO_BAJA, admin: esSi_(m.es_admin),
-        telegram: !!m.telegram_chat_id, pin_pendiente: /^\d{4}$/.test(m.pin),
+        avisos: canalAvisos_(m), pin_pendiente: /^\d{4}$/.test(m.pin),
         vinculo: vinculoDe_(m), registro_completo: registroCompleto_(m) && tienePinPropio_(m),
         fijas: fijas.filter(function (f) { return f.medico_id === m.id; }).map(function (f) {
           return { dia_semana: normalizarDia_(f.dia_semana), turno: f.turno, tipo: f.tipo || TIPO.CONTRATO };

@@ -77,7 +77,7 @@ function textoFilas_(filas) {
 }
 
 function textoAvisos_(m, email) {
-  if (m.telegram_chat_id) return 'Te vamos a avisar por Telegram.';
+  if (pushActivo_(m)) return 'Te vamos a avisar con notificaciones en tu celular' + (email ? ', y por mail a ' + email + ' si fallan.' : '.');
   if (email) return 'Te vamos a avisar por mail a ' + email + '.';
   return 'Por ahora no vas a recibir avisos: activalos desde Mi perfil.';
 }

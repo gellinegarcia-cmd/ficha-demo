@@ -1,6 +1,7 @@
 // Datos de ejemplo de la demo: noviembre 2026, médicos inventados. Todos con PIN 1111.
 // JAVIER GARCIA es el administrador ("jefe"). PAULA RIOS todavía no hizo el registro (se ve el flujo completo).
 // SOFIA LUNA ya se registró como SOLO_REEMPLAZO, con un reemplazo fijo semanal.
+// Avisos: casi todos tienen los avisos push activos (simulados); NICOLAS QUIROGA solo mail.
 // Corre dentro de servidor.html, después de simulador.js y de los archivos de src/.
 (function (w) {
   'use strict';
@@ -9,14 +10,13 @@
   reiniciarEstado_();
   crearHojas_();
   cargarDatosIniciales_();
-  setPropiedad_('TELEGRAM_TOKEN', 'DEMO');
-  setPropiedad_('TELEGRAM_BOT', 'guardias_upa_demo_bot'); // en la demo, "Vincular Telegram" se simula
+  // Firebase simulado: los avisos no salen a ningún lado, se ven en la página.
+  setPropiedad_('FCM_SA', JSON.stringify({ project_id: 'guardias-demo', client_email: 'demo@guardias-demo.iam.gserviceaccount.com', private_key: 'DEMO' }));
 
   const M = {};
-  let chat = 1000;
   const alta = (clave, nombre, extra) => {
     reiniciarEstado_();
-    M[clave] = insertar_('MEDICOS', Object.assign({ id: siguienteId_('MEDICOS'), nombre_apellido: nombre, pin: '1111', email: '', telegram_chat_id: String(chat++),
+    M[clave] = insertar_('MEDICOS', Object.assign({ id: siguienteId_('MEDICOS'), nombre_apellido: nombre, pin: '1111', email: nombre.split(' ')[0].toLowerCase() + '@demo.invalid', telegram_chat_id: '',
       activo: true, es_admin: false, contrato_revisado: true, pin_propio: true, vinculo: 'CONTRATO' }, extra || {}));
   };
   alta('javier', 'JAVIER GARCIA', { es_admin: true });
@@ -24,9 +24,10 @@
   alta('laura', 'LAURA BENITEZ');
   alta('diego', 'DIEGO FERREYRA');
   alta('nico', 'NICOLAS QUIROGA');
-  alta('paula', 'PAULA RIOS', { contrato_revisado: false, pin_propio: false, vinculo: '', telegram_chat_id: '' });
+  alta('paula', 'PAULA RIOS', { contrato_revisado: false, pin_propio: false, vinculo: '', email: '' });
   alta('sofia', 'SOFIA LUNA', { vinculo: 'SOLO_REEMPLAZO' });
 
+  ['javier', 'martin', 'laura', 'diego', 'sofia'].forEach((k) => { reiniciarEstado_(); guardarPush_(buscarPorId_('MEDICOS', M[k].id), 'demo-celular-' + k + '-' + 'x'.repeat(24), 'android'); });
   const fija = (k, d, t, tipo) => insertar_('GUARDIA_FIJA', { medico_id: M[k].id, dia_semana: d, turno: t, tipo: tipo || 'CONTRATO', vigente: true });
   fija('javier', 'jueves', '24H');
   fija('javier', 'lunes', '24H', 'REEMPLAZO_HOSPITAL');
@@ -68,16 +69,16 @@
   const PERMITIDAS = ['api', 'login', 'medicosPublico'];
   let llamadas = [];
   try { llamadas = JSON.parse(sessionStorage.getItem(CLAVE) || '[]'); } catch (e) { llamadas = []; }
-  // "Vincular Telegram": en la demo no hay bot; se simula el /start que mandaría Telegram.
-  const vincular = (codigo) => { reiniciarEstado_(); vincularChat_(String(9000 + Number(String(codigo).split('-')[0])), String(codigo)); };
-  llamadas.forEach((c) => {
-    try { if (c.f === '__vincular') vincular(c.args[0]); else w[c.f].apply(null, c.args); } catch (e) { /* lo mismo que la primera vez */ }
-  });
-  w.demoVincularTelegram = function (codigo) {
-    vincular(codigo);
-    llamadas.push({ f: '__vincular', args: [String(codigo)] });
-    try { sessionStorage.setItem(CLAVE, JSON.stringify(llamadas)); } catch (e) { /* sin guardar */ }
+  // Además de las llamadas de la app, se repiten los botones tocados en un aviso y el recordatorio simulado.
+  const repetir = (c) => {
+    if (c.f === '__accion') return accionAviso_(c.args[0]);
+    if (c.f === '__recordatorio') { reiniciarEstado_(); return tareaRecordatorioDiario_(hoy_()); }
+    return w[c.f].apply(null, c.args);
   };
+  const anotar = (c) => { llamadas.push(c); try { sessionStorage.setItem(CLAVE, JSON.stringify(llamadas)); } catch (e) { /* sin guardar */ } };
+  llamadas.forEach((c) => { try { repetir(c); } catch (e) { /* lo mismo que la primera vez */ } });
+  w.demoAccion = function (firma) { const r = accionAviso_(firma); anotar({ f: '__accion', args: [firma] }); return JSON.parse(JSON.stringify(r)); };
+  w.demoRecordatorio = function () { reiniciarEstado_(); tareaRecordatorioDiario_(hoy_()); anotar({ f: '__recordatorio', args: [] }); };
 
   w.demoLlamar = function (f, args) {
     if (!PERMITIDAS.includes(f)) throw new Error('No permitido en la demo: ' + f);
@@ -90,15 +91,16 @@
     return JSON.parse(JSON.stringify(r === undefined ? null : r));
   };
   w.demoReiniciar = function () { try { sessionStorage.removeItem(CLAVE); } catch (e) { /* nada */ } };
+  // Avisos push "enviados" (a quién, texto y botones) y mails de respaldo.
+  const vistaPush = (p, i) => {
+    reiniciarEstado_();
+    const fila = filas_('PUSH').find((x) => x.token === p.token);
+    return { n: i, medico_id: fila ? fila.medico_id : '', a: fila ? nombreDe_(fila.medico_id) : '', titulo: p.data.titulo, cuerpo: p.data.cuerpo,
+      url: p.data.url, acciones: JSON.parse(p.data.acciones || '[]') };
+  };
+  w.demoPush = function (desde) { return w.__simulador.push.map(vistaPush).slice(desde || 0); };
   w.demoMensajes = function () {
-    const s = w.__simulador;
-    return {
-      telegram: s.telegram.filter((t) => t.metodo === 'sendMessage').map((t) => {
-        const m = filas_('MEDICOS').find((x) => String(x.telegram_chat_id) === String(t.chat_id));
-        return { a: m ? m.nombre_apellido : t.chat_id, texto: t.text, botones: ((t.reply_markup && t.reply_markup.inline_keyboard) || []).map((f) => f.map((b) => b.text)) };
-      }),
-      mails: s.mails.map((m) => ({ a: m.to, asunto: m.subject, cuerpo: m.body || '' }))
-    };
+    return { push: w.demoPush(0), mails: w.__simulador.mails.map((m) => ({ a: m.to, asunto: m.subject, cuerpo: m.body || '' })) };
   };
   w.demoListo = true;
 })(window);

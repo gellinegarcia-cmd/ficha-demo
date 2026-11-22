@@ -95,7 +95,7 @@
 
   // ---------- Servicios de Google simulados ----------
   const hojas = new Map(), props = new Map(), cache = new Map();
-  const mails = [], telegram = [], triggers = [], drive = { archivos: [], carpetas: [] };
+  const mails = [], push = [], triggers = [], drive = { archivos: [], carpetas: [] };
   let uuid = 0; // determinístico: la demo se reconstruye repitiendo lo que se hizo
   const libro = {
     getId: () => 'LIBRO_DEMO', getSheetByName: (n) => hojas.get(n) || null,
@@ -139,7 +139,16 @@
       },
       getUuid: () => { uuid++; return '00000000-0000-4000-8000-' + String(uuid).padStart(12, '0'); },
       sleep() {},
-      newBlob: (bytes, mime, nombre) => ({ mime, nombre, getBytes() { return bytes; }, getName: () => nombre }),
+      newBlob: (datos, mime, nombre) => {
+        const bytes = typeof datos === 'string' ? utf8(datos) : datos;
+        return { mime, nombre, getBytes() { return bytes; }, getName: () => nombre,
+          getDataAsString: () => new TextDecoder().decode(new Uint8Array(sinSigno(bytes))) };
+      },
+      base64DecodeWebSafe: (t) => {
+        const b = atob(String(t).replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '') + '==='.slice((String(t).replace(/=+$/, '').length + 3) % 4));
+        return Array.from(b, (c) => c.charCodeAt(0));
+      },
+      computeRsaSha256Signature: (v) => sha256(utf8('demo|' + v)), // en la demo no hay Firebase de verdad
       base64Encode: (b) => base64(b),
       base64EncodeWebSafe: (b) => base64(b).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') + '=',
       computeHmacSha256Signature: (v, k) => hmac(v, k),
@@ -148,12 +157,17 @@
     },
     MailApp: { sendEmail: (o) => { mails.push(o); }, getRemainingDailyQuota: () => 100 },
     UrlFetchApp: { fetch(url, op) {
+      const responder = (codigo, cuerpo) => ({ getResponseCode: () => codigo, getContentText: () => JSON.stringify(cuerpo) });
+      if (url === 'https://oauth2.googleapis.com/token') return responder(200, { access_token: 'DEMO', expires_in: 3600 });
+      if (url.indexOf('https://fcm.googleapis.com/') === 0) {
+        const m = JSON.parse(op.payload).message;
+        push.push({ token: m.token, data: m.data });
+        return responder(200, { name: 'demo/' + push.length });
+      }
       if (url.includes('googleapis.com')) return simularDrive(url, op);
-      const metodo = url.split('/').pop();
-      const cuerpo = op && op.payload ? JSON.parse(op.payload) : {};
-      telegram.push({ metodo, ...cuerpo });
-      return { getContentText: () => JSON.stringify({ ok: true, result: { message_id: telegram.length } }), getResponseCode: () => 200 };
+      throw new Error('La demo no se conecta a ' + url);
     } },
+    ContentService: { createTextOutput: (t) => ({ contenido: t, setMimeType() { return this; } }), MimeType: { JSON: 'json' } },
     HtmlService: {
       createHtmlOutput: (t) => ({ contenido: t }),
       createTemplateFromFile: (n) => ({ evaluate: () => { const o = { archivo: n, addMetaTag() { return o; }, setTitle() { return o; }, setXFrameOptionsMode() { return o; } }; return o; } }),
@@ -166,6 +180,6 @@
       getOAuthToken: () => 'TOKEN',
       getService: () => ({ getUrl: () => w.parent.location.href.split('?')[0].split('#')[0] })
     },
-    __simulador: { hojas, props, mails, telegram }
+    __simulador: { hojas, props, mails, push }
   });
 })(window);

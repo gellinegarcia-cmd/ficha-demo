@@ -65,10 +65,6 @@ function correrTareas_() {
       filas_('CIERRES').filter(function (c) { return c.regeneracion_pendiente; }).forEach(function (c) {
         enviarCorregido_(c.mes, c.regeneracion_pendiente);
       });
-    },
-    function () {
-      const clave = fecha + hora.slice(0, 2);
-      if (tokenTelegram_() && !yaHecho_('tg', clave)) { revisarWebhook_(); marcarHecho_('tg', clave); }
     }
   ];
   // Si una tarea falla, las otras igual corren; la fallida se reintenta en 15 minutos.

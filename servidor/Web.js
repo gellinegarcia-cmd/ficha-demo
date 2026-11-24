@@ -218,8 +218,16 @@ function api(token, metodo, args, opciones) {
   } catch (e) {
     if (e instanceof ErrorUsuario) return { ok: false, error: e.message };
     console.error(e);
+    avisarErrorServidor_(metodo, e, token);
     return { ok: false, error: 'Hubo un error. Probá de nuevo en un rato.' };
   }
+}
+
+// Error inesperado en el servidor: mail a la dueña (comparte el límite de uno por hora con los de la pantalla).
+function avisarErrorServidor_(metodo, e, token) {
+  try {
+    reportarError(token, { mensaje: (e && e.message) || String(e), pila: (e && e.stack) || '', vista: 'servidor: ' + metodo, navegador: 'Apps Script', direccion: '' });
+  } catch (x) { console.error(x); }
 }
 
 function apiInicio_(m) {

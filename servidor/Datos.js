@@ -44,9 +44,23 @@ function libro_() {
   return _cacheLibro;
 }
 
+// Si falta una hoja del esquema (por ej., una versión nueva antes de correr "Instalar"), se crea sola con
+// sus encabezados. Así la app nunca se queda sin funcionar por eso.
 function hoja_(nombre) {
-  const h = libro_().getSheetByName(nombre);
-  if (!h) throw new Error('Falta la hoja ' + nombre + '. Ejecutá "Instalar" desde el menú Fichá.');
+  const ss = libro_();
+  let h = ss.getSheetByName(nombre);
+  if (h) return h;
+  if (!ESQUEMA[nombre]) throw new Error('Falta la hoja ' + nombre + '. Ejecutá "Instalar" desde el menú Fichá.');
+  try {
+    h = ss.insertSheet(nombre);
+    const cols = ESQUEMA[nombre];
+    h.getRange(1, 1, h.getMaxRows(), cols.length).setNumberFormat('@');
+    h.getRange(1, 1, 1, cols.length).setValues([cols]).setFontWeight('bold').setBackground('#9FC5E8');
+    h.setFrozenRows(1);
+  } catch (e) {
+    h = ss.getSheetByName(nombre); // otra ejecución la creó al mismo tiempo
+    if (!h) throw e;
+  }
   return h;
 }
 

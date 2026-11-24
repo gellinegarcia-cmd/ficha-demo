@@ -317,9 +317,22 @@ function medir(metodo, total, servidor) {
     localStorage.setItem(CLAVE_MEDIDAS, JSON.stringify(l.slice(-60)));
   } catch (e) {}
 }
+// Lecturas: si el servidor tarda más de 8 s, se corta y la pantalla ofrece [Reintentar].
+// Escrituras: no se cortan (el servidor puede estar guardando), pero el cartelito avisa que tarda.
+const ESPERA_MAXIMA = 8000;
+const METODOS_QUE_ESCRIBEN = /^(registro(Pin|Guardar|Confirmar)|guardar|quitar|hagoYo|meCubre|responder|cargar|editar|desmarcar|anular|deshacer|agregar|cancelar|recibi|tomar|liberar|cambiar|regenerar|corregir|borrar)/;
 function llamar(metodo, ...args) {
   const t0 = performance.now();
-  return new Promise((ok, mal) => {
+  const escribe = METODOS_QUE_ESCRIBEN.test(metodo);
+  return new Promise((ok0, mal0) => {
+    let listo = false;
+    const ok = (v) => { if (!listo) { listo = true; clearTimeout(reloj); ok0(v); } };
+    const mal = (e) => { if (!listo) { listo = true; clearTimeout(reloj); mal0(e); } };
+    const reloj = setTimeout(() => {
+      if (escribe) { try { $('guardando').textContent = 'El servidor tarda en responder… sigue guardando'; } catch (e) {} return; }
+      medir(metodo + ' (más de 8 s)', performance.now() - t0, 0);
+      mal(new Error('El servidor tarda en responder.'));
+    }, ESPERA_MAXIMA);
     google.script.run
       .withSuccessHandler((r) => {
         medir(metodo, performance.now() - t0, r && r.ms);
@@ -366,7 +379,7 @@ function repintarFondo() {
 // Las escrituras van de a una, en orden. Si falla, vuelve a como estaba y avisa.
 let colaGuardado = Promise.resolve();
 let enCurso = 0;
-function marcarGuardando() { $('guardando').hidden = enCurso === 0; }
+function marcarGuardando() { $('guardando').hidden = enCurso === 0; if (!enCurso) $('guardando').textContent = 'Guardando…'; }
 function enFondo(metodo, args, op) {
   op = op || {};
   const foto = paquete ? JSON.stringify(paquete) : null;
@@ -466,6 +479,8 @@ function mostrarFalla(e) {
 }
 window.addEventListener('error', (ev) => { if (ev && ev.error) mostrarFalla(ev.error); });
 window.addEventListener('unhandledrejection', (ev) => { mostrarFalla(ev && ev.reason); });
+// Versión de la app (la pone tools/web/construir.js al armarla).
+const VERSION_APP = (window.GUARDIAS_CONFIG && window.GUARDIAS_CONFIG.version) || 'Apps Script';
 function mostrarError(e) { pintar(el('div', { class: 'error' }, e.message), el('button', { class: 'grande sec', onclick: () => ir(vista) }, 'Reintentar')); }
 function bloqueAviso() {
   if (!aviso) return null;
@@ -1425,7 +1440,8 @@ async function verContrato() {
       bloqueAvisos(() => verContrato(), true),
       el('label', { htmlFor: 'p-email' }, 'Mail (respaldo)'), email, el('br'), el('br'),
       el('button', { class: 'grande sec', onclick: accion(async () => { await llamar('guardarMiEmail', email.value); datos.yo.email = email.value.trim(); datos.recordar_avisos = !datos.yo.push && !datos.yo.email; aviso = { texto: 'Mail guardado.' }; verContrato(); }) }, 'Guardar mail')),
-    bloquePin());
+    bloquePin(),
+    el('p', { class: 'suave', id: 'p-version', style: 'text-align:center;margin-top:18px' }, 'Versión de la app: ' + VERSION_APP));
 }
 function bloquePin() {
   const a = el('input', { type: 'password', inputMode: 'numeric', maxLength: 4, placeholder: 'PIN actual', 'aria-label': 'PIN actual' });

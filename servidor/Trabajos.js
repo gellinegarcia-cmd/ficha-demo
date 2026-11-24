@@ -27,6 +27,7 @@ function correrTareas_() {
   const previo = sumarMeses_(mes, -1);
   const tareas = [
     function () { tareaRespaldo_(); },
+    function () { tareaSembrarRegistrados_(); },
     function () {
       // A las 00:00 del corte el mes ya está cerrado por fecha: acá se hace el pase al mes siguiente.
       [previo, mes].forEach(function (m) {
@@ -355,4 +356,18 @@ function enviarCorregido_(mes, detalle) {
   c.regeneracion_pendiente = '';
   guardar_('CIERRES', c);
   registrar_('sistema', 'excel_corregido', mes + ' versión ' + n);
+}
+
+// Una sola vez: los médicos que se registraron antes de que el registro generara las guardias (24/11/2026)
+// y no tienen ninguna guardia de hoy en adelante, reciben las del mes actual y el siguiente.
+function tareaSembrarRegistrados_() {
+  if (propiedad_('sembrado_registrados_v1')) return;
+  const hoyStr = hoy_();
+  medicos_().filter(function (m) { return registroCompleto_(m) && tienePinPropio_(m); }).forEach(function (m) {
+    const tiene = filas_('GUARDIAS').some(function (g) {
+      return g.estado !== ESTADO.ANULADA && g.fecha >= hoyStr && (g.medico_titular_id === m.id || g.medico_que_hizo_id === m.id);
+    });
+    if (!tiene) sembrarDesdeHoy_(m.id);
+  });
+  setPropiedad_('sembrado_registrados_v1', hoyStr);
 }

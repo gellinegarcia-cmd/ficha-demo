@@ -284,18 +284,29 @@ const CLAVE_MEDIDAS = 'ficha_medidas';
 const VISTAS_DE_PAQUETE = ['mes', 'libres', 'vacaciones', 'deudas'];
 let paquete = null;
 let ultimaSync = 0;
+// Versión de la forma del paquete: si cambia, lo guardado en el celular se descarta solo y se vuelve a pedir.
+const VERSION_PAQUETE = 2;
+const mesValido = (d) => !!d && Array.isArray(d.dias) && d.dias.length > 0 && d.dias.every((x) => x && typeof x.fecha === 'string' && Array.isArray(x.guardias))
+  && Array.isArray(d.guardias) && Array.isArray(d.pendientes);
+function inicioValido(i) { return !!i && !!i.yo && i.yo.id !== undefined && typeof i.hoy === 'string' && Array.isArray(i.turnos) && Array.isArray(i.companeros); }
+function paqueteValido(p) {
+  return !!p && inicioValido(p.inicio) && !!p.meses && typeof p.meses === 'object' && Object.keys(p.meses).length > 0 &&
+    Object.values(p.meses).every(mesValido) && Array.isArray(p.libres) && Array.isArray(p.vacaciones);
+}
 function leerPaquete() {
-  try {
-    const p = JSON.parse(localStorage.getItem(CLAVE_PAQUETE) || 'null');
-    return p && p.inicio && p.inicio.yo && token && token.split('.')[0] === String(p.inicio.yo.id) ? p : null;
-  } catch (e) { return null; }
+  let g = null;
+  try { g = JSON.parse(localStorage.getItem(CLAVE_PAQUETE) || 'null'); } catch (e) { g = null; }
+  const p = g && g.v === VERSION_PAQUETE ? g.p : null;
+  if (!p || !paqueteValido(p) || !token || token.split('.')[0] !== String(p.inicio.yo.id)) { if (g) olvidarPaquete(); return null; }
+  return p;
 }
 function aplicarPaquete(p) {
-  if (!p || !p.inicio) return;
+  if (!p || !inicioValido(p.inicio)) return false;
   paquete = p;
   datos = p.inicio;
   ultimaSync = Date.now();
-  try { localStorage.setItem(CLAVE_PAQUETE, JSON.stringify(p)); } catch (e) { /* sin memoria: igual anda */ }
+  try { if (paqueteValido(p)) localStorage.setItem(CLAVE_PAQUETE, JSON.stringify({ v: VERSION_PAQUETE, p: p })); } catch (e) { /* sin memoria: igual anda */ }
+  return true;
 }
 function olvidarPaquete() { paquete = null; try { localStorage.removeItem(CLAVE_PAQUETE); } catch (e) {} }
 // Tiempos de cada llamada (para la pestaña Mi servicio del jefe).
@@ -329,10 +340,11 @@ async function delPaquete(clave, metodo, ...args) {
   if (paquete) paquete[clave] = d;
   return d;
 }
+// Si lo guardado para ese mes falta o está incompleto, se pide de nuevo al servidor.
 async function mesDelPaquete(mes) {
-  if (paquete && paquete.meses && paquete.meses[mes]) return paquete.meses[mes];
+  if (paquete && paquete.meses && mesValido(paquete.meses[mes])) return paquete.meses[mes];
   const d = await llamar('miMes', mes);
-  if (paquete) { paquete.meses = paquete.meses || {}; paquete.meses[mes] = d; }
+  if (paquete && mesValido(d)) { paquete.meses = paquete.meses || {}; paquete.meses[mes] = d; }
   return d;
 }
 // Trae el paquete de nuevo sin bloquear (al abrir la app y al volver a ella) y redibuja si corresponde.
@@ -433,6 +445,27 @@ function pintar(...nodos) {
   window.scrollTo(0, 0);
 }
 function cargando() { pintar(el('div', { class: 'cargando' }, 'Cargando…')); }
+// Error inesperado: "Algo falló, reintentá" y aviso por mail a la dueña (el servidor manda como mucho uno por hora).
+let fallaReportada = false;
+function reportarFalla(e) {
+  if (fallaReportada) return;
+  fallaReportada = true;
+  try {
+    google.script.run.withFailureHandler(() => {}).reportarError(token || '', {
+      mensaje: String((e && e.message) || e || ''), pila: String((e && e.stack) || ''), vista: vista,
+      navegador: navigator.userAgent, direccion: location.pathname + location.search
+    });
+  } catch (x) {}
+}
+function mostrarFalla(e) {
+  reportarFalla(e);
+  enCurso = 0;
+  try { $('guardando').hidden = true; } catch (x) {}
+  $('app').replaceChildren(el('div', { class: 'error', id: 'falla' }, 'Algo falló, reintentá.'),
+    el('button', { class: 'grande', id: 'btn-reintentar', onclick: () => { olvidarPaquete(); fallaReportada = false; arrancar(); } }, 'Reintentar'));
+}
+window.addEventListener('error', (ev) => { if (ev && ev.error) mostrarFalla(ev.error); });
+window.addEventListener('unhandledrejection', (ev) => { mostrarFalla(ev && ev.reason); });
 function mostrarError(e) { pintar(el('div', { class: 'error' }, e.message), el('button', { class: 'grande sec', onclick: () => ir(vista) }, 'Reintentar')); }
 function bloqueAviso() {
   if (!aviso) return null;
@@ -893,6 +926,7 @@ async function regResumen() {
 }
 
 function ir(v) {
+  if (!datos) return arrancar(); // se cerró la sesión o todavía no hay datos: se empieza de nuevo
   if (v === 'servicio') modoJefe = false;
   vista = v;
   pintarNav();
@@ -916,11 +950,17 @@ $('btn-jefe').addEventListener('click', () => { modoJefe = !modoJefe; ir(modoJef
 // --- Médico: Mi mes ---
 const NOMBRE_COLOR = { prevista: 'Prevista', confirmada: 'Confirmada', cubierta: 'Cubierta', reemplazo: 'Reemplazo', espera: 'Esperando', conflicto: 'Conflicto' };
 async function verMes() {
-  cargando();
   let d;
-  const enMemoria = paquete && paquete.meses && paquete.meses[mesActual];
-  if (!enMemoria) cargando();
-  try { d = await mesDelPaquete(mesActual); } catch (e) { return mostrarError(e); }
+  const mes = mesActual;
+  if (!(paquete && paquete.meses && mesValido(paquete.meses[mes]))) cargando();
+  try { d = await mesDelPaquete(mes); } catch (e) { return mostrarError(e); }
+  // Mientras esperaba, pudo cerrarse la sesión o cambiar de pantalla: no se dibuja nada viejo.
+  if (!datos || !token || vista !== 'mes' || mesActual !== mes) return;
+  if (!mesValido(d)) {
+    try { d = await llamar('miMes', mes); } catch (e) { return mostrarError(e); }
+    if (!datos || !token || vista !== 'mes' || mesActual !== mes) return;
+    if (!mesValido(d)) return mostrarFalla(new Error('Mi mes llegó incompleto (' + mes + ')'));
+  }
   const primero = (new Date(d.dias[0].fecha + 'T12:00:00').getDay() + 6) % 7;
   const celdas = DIAS_CAB.map((c) => el('div', { class: 'cab' }, c));
   for (let i = 0; i < primero; i++) celdas.push(el('div'));

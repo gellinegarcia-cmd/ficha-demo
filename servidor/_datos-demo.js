@@ -75,7 +75,7 @@
 
   // Lo que se hace en la demo se guarda solo en esta pestaña y se repite al recargar la página.
   const CLAVE = 'guardias-demo-llamadas';
-  const PERMITIDAS = ['api', 'login', 'medicosPublico', 'autoRegistro'];
+  const PERMITIDAS = ['api', 'login', 'medicosPublico', 'autoRegistro', 'reportarError'];
   let llamadas = [];
   try { llamadas = JSON.parse(sessionStorage.getItem(CLAVE) || '[]'); } catch (e) { llamadas = []; }
   // Además de las llamadas de la app, se repiten los botones tocados en un aviso y el recordatorio simulado.

@@ -150,7 +150,7 @@ function doPost(e) {
   let r;
   try {
     const p = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    const rutas = { api: api, login: login, medicosPublico: medicosPublico, autoRegistro: autoRegistro, accionAviso: accionAviso_ };
+    const rutas = { api: api, login: login, medicosPublico: medicosPublico, autoRegistro: autoRegistro, accionAviso: accionAviso_, reportarError: reportarError };
     const a = Array.isArray(p.args) ? p.args : [];
     r = Object.prototype.hasOwnProperty.call(rutas, p.f) ? rutas[p.f].apply(null, a) : { ok: false, error: 'Pedido desconocido.' };
   } catch (err) {
@@ -172,6 +172,28 @@ function paquete_(m, mesVista) {
 }
 
 // opciones.mes: el mes que está mirando. Las escrituras devuelven también el paquete actualizado.
+// Pública: la pantalla avisa un error inesperado. Le llega un mail a la dueña, como mucho uno por hora
+// (aunque lo llamen muchas veces). Nunca va con datos de salud: solo el mensaje técnico y la pantalla.
+function reportarError(token, info) {
+  reiniciarEstado_();
+  try {
+    const ahora = ahora_().getTime();
+    if (ahora - Number(propiedad_('ultimo_error_mail') || 0) < 3600000) return { ok: true, enviado: false };
+    setPropiedad_('ultimo_error_mail', ahora);
+    const m = medicoDeSesion_(token);
+    const i = info || {};
+    const corto = function (v, n) { return String(v === undefined || v === null ? '' : v).slice(0, n); };
+    const texto = ['Hubo un error en la app Fichá (te llega como mucho un aviso por hora).', '',
+      'Quién: ' + (m ? m.nombre_apellido : 'sin sesión'), 'Pantalla: ' + corto(i.vista, 40), 'Dirección: ' + corto(i.direccion, 120),
+      'Error: ' + corto(i.mensaje, 500), 'Dónde: ' + corto(i.pila, 1500), 'Navegador: ' + corto(i.navegador, 300), 'Cuándo: ' + marcaTiempo_()].join('\n');
+    MailApp.sendEmail({ to: MAIL_REVISION, subject: 'Fichá: error en la app', body: texto, name: 'Fichá' });
+    registrar_('sistema', 'error_pantalla', corto(i.mensaje, 120));
+    return { ok: true, enviado: true };
+  } catch (e) {
+    return { ok: false };
+  }
+}
+
 function api(token, metodo, args, opciones) {
   reiniciarEstado_();
   const inicioMs = Date.now();

@@ -12,6 +12,8 @@
   crearHojas_();
   cargarDatosIniciales_();
   setCfg_('codigo_servicio', 'DEMO24');
+  setCfg_('codigo_jefe', 'JEFE24');
+  setPropiedad_('codigo_jefe_habilitado', 'JEFE24'); // en la demo se puede probar "Soy el jefe del servicio"
   // Firebase simulado: los avisos no salen a ningún lado, se ven en la página.
   setPropiedad_('FCM_SA', JSON.stringify({ project_id: 'guardias-demo', client_email: 'demo@guardias-demo.iam.gserviceaccount.com', private_key: 'DEMO' }));
 

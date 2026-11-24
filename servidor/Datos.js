@@ -86,9 +86,18 @@ function siguienteId_(nombre) {
   return String(filas_(nombre).reduce(function (m, x) { return Math.max(m, Number(x.id) || 0); }, 0) + 1);
 }
 
+// Si a la hoja le falta una columna del ESQUEMA (por ej., una versión nueva antes de correr "Instalar"),
+// se agrega al final antes de escribir. Si no, el dato se perdería en silencio.
 function aFilaHoja_(nombre, obj) {
   const hoja = hoja_(nombre);
-  const cab = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0].map(textoCelda_);
+  let cab = hoja.getRange(1, 1, 1, Math.max(hoja.getLastColumn(), 1)).getValues()[0].map(textoCelda_);
+  while (cab.length && cab[cab.length - 1] === '') cab.pop();
+  const faltan = (ESQUEMA[nombre] || []).filter(function (c) { return cab.indexOf(c) < 0; });
+  if (faltan.length) {
+    hoja.getRange(1, cab.length + 1, 1, faltan.length).setValues([faltan]).setFontWeight('bold');
+    hoja.getRange(2, cab.length + 1, Math.max(hoja.getMaxRows() - 1, 1), faltan.length).setNumberFormat('@');
+    cab = cab.concat(faltan);
+  }
   return cab.map(function (c) {
     const v = obj[c];
     if (v === true) return 'TRUE';

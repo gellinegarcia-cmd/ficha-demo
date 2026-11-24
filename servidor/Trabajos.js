@@ -26,6 +26,7 @@ function correrTareas_() {
   const mes = mesDe_(fecha);
   const previo = sumarMeses_(mes, -1);
   const tareas = [
+    function () { tareaRespaldo_(); },
     function () {
       // A las 00:00 del corte el mes ya está cerrado por fecha: acá se hace el pase al mes siguiente.
       [previo, mes].forEach(function (m) {

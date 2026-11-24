@@ -98,7 +98,7 @@
 </head>
 <body><div id="demo-cartel" style="background:#b45309;color:#fff;padding:8px 12px;font:600 14px/1.35 system-ui,Arial,sans-serif;text-align:center">
   DEMO — datos de prueba
-  <div style="font-weight:400;font-size:12px;margin-top:2px">Todos los PIN: 1111 · Código del servicio para registrarse: DEMO24 · Jefe: JAVIER GARCIA (pestaña Mi servicio) · NICOLAS QUIROGA: ausente, 2 guardias libres (una ya tomada) · PAULA RIOS: registro desde cero · SOFIA LUNA: solo reemplazos · Los avisos se ven acá arriba (simulados): no usa la planilla real ni manda mensajes</div>
+  <div style="font-weight:400;font-size:12px;margin-top:2px">Todos los PIN: 1111 · Código del servicio para registrarse: DEMO24 · Código de jefe: JEFE24 · Jefe: JAVIER GARCIA (pestaña Mi servicio) · NICOLAS QUIROGA: ausente, 2 guardias libres (una ya tomada) · PAULA RIOS: registro desde cero · SOFIA LUNA: solo reemplazos · Los avisos se ven acá arriba (simulados): no usa la planilla real ni manda mensajes</div>
   <div style="margin-top:6px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
     <button type="button" id="demo-recordatorio" style="font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer">Simular el aviso de las 8:00</button>
     <button type="button" id="demo-mensajes" style="font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer">Avisos y mails enviados</button>
@@ -363,6 +363,15 @@ async function pantallaLogin() {
 }
 
 // "No estoy en la lista": código del servicio + nombre y apellido + PIN. Después sigue el registro de siempre.
+function errorPin(pin, repetido) {
+  if (!/^\d{4}$/.test(pin)) return 'El PIN tiene que tener 4 números.';
+  if (/^(\d)\1{3}$/.test(pin)) return 'Elegí un PIN que no sea 4 números iguales (como 1111).';
+  const d = pin.split('').map(Number);
+  const seguidos = (paso) => d.every((x, i) => i === 0 || x === d[i - 1] + paso);
+  if (seguidos(1) || seguidos(-1)) return 'Elegí un PIN que no sea de números seguidos (como 1234 o 4321).';
+  if (repetido !== undefined && pin !== repetido) return 'Los dos PIN no coinciden.';
+  return '';
+}
 function nombreComoExcel(t) {
   return String(t || '').toUpperCase().replace(/Ñ/g, '\u0001').normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/\u0001/g, 'Ñ').replace(/[^A-ZÑ' -]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -380,14 +389,32 @@ function pantallaAutoRegistro() {
   const error = el('div', { class: 'error', hidden: true, role: 'alert' });
   const caja = el('div', { id: 'a-parecido' });
   const boton = el('button', { class: 'grande', type: 'submit', id: 'a-seguir' }, 'Siguiente');
+  const jefe = el('input', { id: 'a-codigo-jefe', autocapitalize: 'characters', autocomplete: 'off', spellcheck: false, maxLength: 12 });
+  const cajaJefe = el('div', { id: 'a-caja-jefe', hidden: true }, el('label', { htmlFor: 'a-codigo-jefe' }, 'Código de jefe'), jefe,
+    el('p', { class: 'suave', style: 'margin:4px 0 0' }, 'Con este código quedás como jefe del servicio.'));
+  const linkJefe = el('a', { href: '#', id: 'a-soy-jefe', class: 'chico-link', style: 'text-align:left;padding:8px 0', onclick: (ev) => {
+    ev.preventDefault(); cajaJefe.hidden = false; linkJefe.hidden = true; jefe.focus();
+  } }, 'Soy el jefe del servicio');
+  let nombreOk = '';
   const enviar = (otraPersona) => {
     error.hidden = true;
     caja.replaceChildren();
     const fallar = (t) => { error.textContent = t; error.hidden = false; boton.disabled = false; error.scrollIntoView({ block: 'center' }); };
     if (!codigo.value.trim()) return fallar('Escribí el código del servicio.');
-    if (nombreComoExcel(nombre.value).split(' ').length < 2) return fallar('Escribí tu nombre y tu apellido.');
-    if (!/^\d{4}$/.test(a.value)) return fallar('El PIN tiene que tener 4 números.');
-    if (a.value !== b.value) return fallar('Los dos PIN no coinciden.');
+    if (!cajaJefe.hidden && !jefe.value.trim()) return fallar('Escribí el código de jefe, o tocá Volver si no sos el jefe.');
+    const n = nombreComoExcel(nombre.value);
+    if (n.split(' ').length < 2) return fallar('Escribí tu nombre y tu apellido.');
+    const problema = errorPin(a.value, b.value);
+    if (problema) return fallar(problema);
+    // Antes de mandar: confirmar cómo va a figurar en el Excel de RRHH.
+    if (nombreOk !== n) {
+      caja.replaceChildren(el('div', { class: 'tarjeta', id: 'a-confirmar-nombre', role: 'alert' },
+        el('div', null, 'Así vas a figurar en el Excel de RRHH:'), el('div', { class: 'destacado', id: 'a-nombre-excel', style: 'margin:6px 0 10px' }, n),
+        el('button', { class: 'grande', type: 'button', id: 'a-nombre-ok', onclick: () => { nombreOk = n; enviar(otraPersona); } }, 'Es correcto'),
+        el('button', { class: 'grande sec', type: 'button', id: 'a-nombre-corregir', onclick: () => { caja.replaceChildren(); nombre.focus(); } }, 'Corregir')));
+      caja.scrollIntoView({ block: 'center' });
+      return;
+    }
     boton.disabled = true;
     google.script.run.withSuccessHandler((r) => {
       if (r.ok) { token = r.token; escribir(token); arrancar(); return; }
@@ -401,13 +428,13 @@ function pantallaAutoRegistro() {
         return;
       }
       fallar(r.error);
-    }).withFailureHandler(() => fallar('No hay conexión. Probá de nuevo.')).autoRegistro(codigo.value, nombre.value, a.value, !!otraPersona);
+    }).withFailureHandler(() => fallar('No hay conexión. Probá de nuevo.')).autoRegistro(codigo.value, nombre.value, a.value, !!otraPersona, cajaJefe.hidden ? '' : jefe.value);
   };
   const form = el('form', { onsubmit: (ev) => { ev.preventDefault(); enviar(false); } },
     el('label', { htmlFor: 'a-codigo', style: 'margin-top:0' }, 'Código del servicio'), codigo,
-    el('p', { class: 'suave', style: 'margin:4px 0 0' }, 'Te lo pasa un compañero o el jefe.'),
+    el('p', { class: 'suave', style: 'margin:4px 0 0' }, 'Te lo pasa un compañero o el jefe.'), linkJefe, cajaJefe,
     el('label', { htmlFor: 'a-nombre' }, 'Nombre y apellido'), nombre, como,
-    el('label', { htmlFor: 'a-pin' }, 'Creá tu PIN (4 números)'), a, el('label', { htmlFor: 'a-pin2' }, 'Repetilo'), b, el('br'), el('br'), boton);
+    el('label', { htmlFor: 'a-pin' }, 'Creá tu PIN (4 números)'), el('div', { class: 'suave' }, 'No pueden ser 4 números iguales ni seguidos (como 1111 o 1234).'), a, el('label', { htmlFor: 'a-pin2' }, 'Repetilo'), b, el('br'), el('br'), boton);
   pintar(el('h2', null, 'Registrarme'), error, caja, el('div', { class: 'tarjeta' }, form),
     el('button', { class: 'grande sec', type: 'button', onclick: () => pantallaLogin() }, 'Volver'));
 }
@@ -544,14 +571,15 @@ function regPin() {
   const a = el('input', { id: 'r-pin', type: 'password', inputMode: 'numeric', maxLength: 4, pattern: '[0-9]*', autocomplete: 'new-password' });
   const b = el('input', { id: 'r-pin2', type: 'password', inputMode: 'numeric', maxLength: 4, pattern: '[0-9]*', autocomplete: 'new-password' });
   pintar(progreso(1), bloqueAviso(), el('h2', null, 'Creá tu PIN'),
-    el('p', { class: 'suave' }, 'Es el que vas a usar para entrar. Tiene que ser distinto del que te dieron.'),
+    el('p', { class: 'suave' }, 'Es el que vas a usar para entrar. Tiene que ser distinto del que te dieron, y no pueden ser 4 números iguales ni seguidos (como 1111 o 1234).'),
     el('label', { htmlFor: 'r-pin' }, 'PIN nuevo (4 números)'), a, el('label', { htmlFor: 'r-pin2' }, 'Repetilo'), b, el('br'), el('br'),
     el('button', { class: 'grande', id: 'r-siguiente', onclick: regAccion(async () => {
-      if (!/^\d{4}$/.test(a.value)) throw new Error('El PIN tiene que tener 4 números.');
-      if (a.value !== b.value) throw new Error('Los dos PIN no coinciden.');
+      const problema = errorPin(a.value, b.value);
+      if (problema) throw new Error(problema);
       const r = await llamar('registroPin', a.value);
       token = r.token; escribir(token);
       datos = await llamar('inicio');
+      if (datos.registro && datos.registro.paso === '1') throw new Error('Tu PIN no quedó guardado en la planilla. Probá de nuevo; si sigue igual, avisale al jefe del servicio.');
       if (!datos.registro) { $('btn-jefe').hidden = !datos.yo.admin; aviso = { texto: 'PIN guardado.' }; return seguirAlInicio(); }
       pantallaRegistro();
     }) }, 'Siguiente'));
@@ -908,7 +936,14 @@ async function verServicio() {
       el('span', { class: 'suave' }, fechaLinda(c.cuando.slice(0, 10)).replace(/\/\d{4}$/, '') + ' ' + c.cuando.slice(11)))) : vacio('Sin cambios en la última semana.')),
     el('h3', null, 'Herramientas'),
     el('div', { class: 'tarjeta' }, el('div', null, 'Código del servicio para registrarse: ', el('b', { id: 's-codigo' }, d.codigo || '(registro cerrado)')),
-      el('div', { class: 'suave' }, 'Se cambia en Ajustes.')),
+      el('div', { class: 'suave' }, 'Se cambia en Ajustes.'),
+      el('div', { style: 'margin-top:12px' }, 'Código de jefe: ', el('b', { id: 's-codigo-jefe' }, d.codigo_jefe_activo ? d.codigo_jefe : 'sin usar (ya hay jefe)')),
+      el('div', { class: 'suave' }, 'Sirve una sola vez, para que otra persona quede como jefe. Regeneralo cuando haga falta.'),
+      el('button', { class: 'chico', id: 's-regenerar-jefe', style: 'margin-top:6px', onclick: accion(async () => {
+        await llamar('regenerarCodigoJefe');
+        aviso = { texto: 'Listo: hay un código de jefe nuevo. Pasáselo solo a quien tenga que quedar como jefe.' };
+        verServicio();
+      }) }, 'Regenerar código de jefe')),
     herramienta('medicos', 'Médicos'), herramienta('excel', 'Excel del mes'), herramienta('tablero', 'Tablero del mes'),
     herramienta('conflictos', 'Conflictos'), herramienta('ajustes', 'Ajustes y código del servicio'));
 }

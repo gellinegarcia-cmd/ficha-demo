@@ -112,6 +112,7 @@ function tablaApi_() {
     tomarLibre: { e: 1, f: function (m, a) { const g = tomarGuardia_(m, a[0]); return { guardia: vistaGuardia_(g, m), libres: apiLibres_(m) }; } },
     liberarGuardia: { e: 1, f: function (m, a) { return vistaGuardia_(liberarGuardia_(m, a[0], a[1]), m); } },
     servicio: { admin: 1, f: apiServicio_ },
+    regenerarCodigoJefe: { admin: 1, e: 1, f: function (m) { regenerarCodigoJefe_(m); return apiServicio_(); } },
     agregarVacaciones: { e: 1, f: function (m, a) { agregarVacaciones_(m, a[0] || {}); return apiVacaciones_(m); } },
     editarVacaciones: { e: 1, f: function (m, a) { editarVacaciones_(m, a[0], a[1] || {}); return apiVacaciones_(m); } },
     cancelarVacaciones: { e: 1, f: function (m, a) { cancelarVacaciones_(m, a[0]); return apiVacaciones_(m); } },
@@ -362,7 +363,8 @@ function apiContrato_(m) {
 }
 
 function apiCambiarMiPin_(m, actual, nuevo) {
-  if (!/^\d{4}$/.test(String(nuevo))) throw new ErrorUsuario('El PIN nuevo tiene que tener 4 números.');
+  const error = errorPinNuevo_(nuevo);
+  if (error) throw new ErrorUsuario(error);
   if (m.pin !== hashPin_(m.id, String(actual))) throw new ErrorUsuario('El PIN actual no es correcto.');
   m.pin = hashPin_(m.id, String(nuevo));
   m.pin_propio = true;

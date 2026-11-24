@@ -48,11 +48,28 @@ function limpiarBorrador_(b) {
 }
 
 // Paso 1: el PIN que le cargaron no sirve para siempre; elige uno propio.
+// Reglas de un PIN elegido por el médico. Devuelve el motivo en una línea, o '' si está bien.
+function errorPinNuevo_(pin) {
+  pin = String(pin || '');
+  if (!/^\d{4}$/.test(pin)) return 'El PIN tiene que tener 4 números.';
+  if (/^(\d)\1{3}$/.test(pin)) return 'Elegí un PIN que no sea 4 números iguales (como 1111).';
+  const d = pin.split('').map(Number);
+  const seguidos = function (paso) { return d.every(function (x, i) { return i === 0 || x === d[i - 1] + paso; }); };
+  if (seguidos(1) || seguidos(-1)) return 'Elegí un PIN que no sea de números seguidos (como 1234 o 4321).';
+  return '';
+}
+
 function crearPinPropio_(m, nuevo) {
-  if (!/^\d{4}$/.test(String(nuevo))) throw new ErrorUsuario('El PIN tiene que tener 4 números.');
-  m.pin = hashPin_(m.id, String(nuevo));
+  nuevo = String(nuevo || '');
+  const error = errorPinNuevo_(nuevo);
+  if (error) throw new ErrorUsuario(error);
+  if (m.pin === nuevo || m.pin === hashPin_(m.id, nuevo)) throw new ErrorUsuario('Elegí un PIN distinto del que te dieron.');
+  m.pin = hashPin_(m.id, nuevo);
   m.pin_propio = true;
   guardar_('MEDICOS', m);
+  // Se vuelve a leer de la hoja: si no quedó guardado, que se vea el error y no vuelva en silencio al mismo paso.
+  _cacheTablas = {};
+  if (!tienePinPropio_(buscarPorId_('MEDICOS', m.id) || {})) throw new ErrorUsuario('No se pudo guardar tu PIN en la planilla. Probá de nuevo; si sigue igual, avisale al jefe del servicio.');
   registrar_(m.nombre_apellido, 'pin_propio', '');
   return { token: crearSesion_(m) };
 }
@@ -231,8 +248,26 @@ function cupoAutoRegistro_() {
   return c;
 }
 
+// Código de jefe ("Soy el jefe del servicio"): sirve si todavía no hay jefe, o si el jefe actual lo regeneró.
+// Una vez usado deja de funcionar hasta que lo regeneren.
+function codigoJefeValido_(codigo) {
+  const esperado = String(cfg_('codigo_jefe')).toUpperCase().replace(/\s/g, '');
+  const dado = String(codigo || '').toUpperCase().replace(/\s/g, '');
+  if (!esperado || dado !== esperado || propiedad_('codigo_jefe_usado') === esperado) return false;
+  return !medicos_().some(function (m) { return esSi_(m.es_admin); }) || propiedad_('codigo_jefe_habilitado') === esperado;
+}
+
+function regenerarCodigoJefe_(jefe) {
+  const nuevo = nuevoCodigoServicio_();
+  setCfg_('codigo_jefe', nuevo);
+  setPropiedad_('codigo_jefe_habilitado', nuevo);
+  registrar_(jefe.nombre_apellido, 'regenero_codigo_jefe', '');
+  return nuevo;
+}
+
 // Pública (la llama la pantalla de ingreso, sin sesión). otraPersona = true cuando dijo "No, soy otra persona".
-function autoRegistro(codigo, nombre, pin, otraPersona) {
+// codigoJefe: solo si tocó "Soy el jefe del servicio".
+function autoRegistro(codigo, nombre, pin, otraPersona, codigoJefe) {
   reiniciarEstado_();
   return conLock_(function () {
     const cupo = cupoAutoRegistro_();
@@ -251,7 +286,15 @@ function autoRegistro(codigo, nombre, pin, otraPersona) {
     if (n.split(' ').length < 2 || n.replace(/[^A-ZÑ]/g, '').length < 5 || n.length > 60) {
       return { ok: false, error: 'Escribí tu nombre y tu apellido.' };
     }
-    if (!/^\d{4}$/.test(String(pin || ''))) return { ok: false, error: 'El PIN tiene que tener 4 números.' };
+    const errorPin = errorPinNuevo_(pin);
+    if (errorPin) return { ok: false, error: errorPin };
+    const comoJefe = !!String(codigoJefe || '').trim();
+    if (comoJefe && !codigoJefeValido_(codigoJefe)) {
+      cupo.fallos++;
+      guardarCupo();
+      registrar_('sistema', 'codigo_jefe_incorrecto', '');
+      return { ok: false, error: 'El código de jefe no es correcto o ya se usó. Si ya hay un jefe, él lo puede regenerar en Mi servicio.' };
+    }
 
     const todos = medicos_(true);
     const igual = todos.find(function (m) { return normalizarNombre_(m.nombre_apellido).replace(/Ñ/g, 'N') === n.replace(/Ñ/g, 'N'); });
@@ -267,12 +310,16 @@ function autoRegistro(codigo, nombre, pin, otraPersona) {
 
     const id = siguienteId_('MEDICOS');
     const m = insertar_('MEDICOS', {
-      id: id, nombre_apellido: n, pin: hashPin_(id, String(pin)), email: '', telegram_chat_id: '', activo: true, es_admin: false,
+      id: id, nombre_apellido: n, pin: hashPin_(id, String(pin)), email: '', telegram_chat_id: '', activo: true, es_admin: comoJefe,
       contrato_revisado: false, vinculo: '', pin_propio: true, registro: ''
     });
     cupo.altas++;
     guardarCupo();
-    registrar_(n, 'auto_registro', 'se registró solo con el código del servicio');
+    registrar_(n, 'auto_registro', 'se registró solo con el código del servicio' + (comoJefe ? ', como jefe' : ''));
+    if (comoJefe) {
+      setPropiedad_('codigo_jefe_usado', String(cfg_('codigo_jefe')).toUpperCase().replace(/\s/g, ''));
+      setPropiedad_('codigo_jefe_habilitado', '');
+    }
     return { ok: true, token: crearSesion_(m), nombre: n };
   });
 }

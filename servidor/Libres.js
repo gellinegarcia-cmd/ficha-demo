@@ -209,5 +209,7 @@ function apiServicio_() {
     return { cuando: String(l.fecha_hora).slice(0, 16), quien: l.usuario, que: CAMBIOS_SERVICIO[l.accion],
       guardia: g ? fechaCorta_(g.fecha) + ' · ' + TURNOS[g.turno].nombre : (/vacaciones/.test(l.accion) ? String(l.detalle).replace(/\d{4}-\d{2}-\d{2}/g, fechaCorta_).replace(' a ', ' al ') : '') };
   });
-  return { ausencias: ausencias, libres: libres, cambios: cambios, codigo: cfg_('codigo_servicio') };
+  const cj = String(cfg_('codigo_jefe'));
+  return { ausencias: ausencias, libres: libres, cambios: cambios, codigo: cfg_('codigo_servicio'), codigo_jefe: cj,
+    codigo_jefe_activo: !!cj && propiedad_('codigo_jefe_habilitado') === cj.toUpperCase() };
 }

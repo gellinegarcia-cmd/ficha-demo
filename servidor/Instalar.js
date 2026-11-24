@@ -9,7 +9,8 @@ const CONFIG_INICIAL = [
   ['valor_guardia_24', '', 'Opcional: valor de la guardia de 24 h.'],
   ['url_app', '', 'Dirección de la app. Se completa sola; se puede corregir a mano.'],
   ['primer_mes', '', 'Primer mes que la app cierra y manda en Excel sola (ej. 2026-12). Los anteriores se hacen a mano.'],
-  ['codigo_servicio', '', 'Código para registrarse solo ("No estoy en la lista"). Cambialo cuando quieras; vacío = registro cerrado.']
+  ['codigo_servicio', '', 'Código para registrarse solo ("No estoy en la lista"). Cambialo cuando quieras; vacío = registro cerrado.'],
+  ['codigo_jefe', '', 'Código para registrarse como jefe ("Soy el jefe del servicio"). Sirve una sola vez; el jefe lo regenera en Mi servicio.']
 ];
 
 const FERIADOS_INICIALES = [
@@ -86,7 +87,7 @@ function crearHojas_() {
 function cargarDatosIniciales_() {
   const claves = filas_('CONFIG').map(function (c) { return c.clave; });
   CONFIG_INICIAL.forEach(function (c) {
-    if (claves.indexOf(c[0]) < 0) insertar_('CONFIG', { clave: c[0], valor: c[0] === 'codigo_servicio' ? nuevoCodigoServicio_() : c[1], para_que_sirve: c[2] });
+    if (claves.indexOf(c[0]) < 0) insertar_('CONFIG', { clave: c[0], valor: c[0] === 'codigo_servicio' || c[0] === 'codigo_jefe' ? nuevoCodigoServicio_() : c[1], para_que_sirve: c[2] });
   });
   const fechas = filas_('FERIADOS').map(function (f) { return f.fecha; });
   FERIADOS_INICIALES.forEach(function (f) {
@@ -141,9 +142,10 @@ function instalar() {
   reiniciarEstado_();
   if (!propiedad_('SHEET_ID')) setPropiedad_('SHEET_ID', SpreadsheetApp.getActiveSpreadsheet().getId());
   if (quien && !propiedad_('DUENO')) setPropiedad_('DUENO', quien);
+  const nueva = !propiedad_('SECRETO');
   crearHojas_();
   cargarDatosIniciales_();
-  cargarMedicosPrueba_();
+  if (nueva) cargarMedicosPrueba_();
   const cifrados = cifrarPinesVisibles_();
   prepararRegistroPropio_(); // una sola vez: cada médico carga su guardia fija en el registro
   instalarTriggers_();
@@ -221,4 +223,19 @@ function configurarGemini() {
   setPropiedad_('GEMINI_KEY', clave);
   registrar_(quien, 'configurar_gemini', 'clave guardada');
   ui.alert('Listo. La clave de Gemini quedó guardada en las Propiedades del script.');
+}
+
+// Copia de respaldo de toda la planilla, como archivo aparte en el Drive de la dueña.
+// Se pide escribiendo en CONFIG.respaldo "pedir: <nombre>"; la hace el automatismo (corre como la dueña)
+// y deja en CONFIG.respaldo "hecho: <dirección>".
+function tareaRespaldo_() {
+  const pedido = String(cfg_('respaldo'));
+  if (!/^pedir/i.test(pedido)) return;
+  const nombre = pedido.replace(/^pedir:?/i, '').trim() || 'Fichá respaldo ' + Utilities.formatDate(ahora_(), TZ, 'dd-MM');
+  const copia = SpreadsheetApp.create(nombre);
+  const vacia = copia.getSheets()[0];
+  libro_().getSheets().forEach(function (h) { h.copyTo(copia).setName(h.getName()); });
+  copia.deleteSheet(vacia);
+  setCfg_('respaldo', 'hecho: ' + copia.getUrl());
+  registrar_('sistema', 'respaldo', nombre + ': ' + copia.getUrl());
 }

@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="es">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>DEMO — Guardias UPA</title><meta name="robots" content="noindex">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>DEMO — Fichá</title><link rel="icon" type="image/png" href="favicon-32.png"><meta name="robots" content="noindex">
 
 <meta charset="utf-8">
 <style>
   :root {
     --fondo: #f3f5f8; --tarjeta: #fff; --texto: #1c2733; --suave: #5b6876; --borde: #d8dee6;
-    --primario: #1a56a8; --primario-texto: #fff;
+    --primario: #121826; --primario-texto: #121826; --acento: #FFD23F; --acento-borde: #d9ab12;
     --prevista: #dfe5ec; --confirmada: #bfe6c9; --cubierta: #d9c8f0; --reemplazo: #a9d4f5;
     --anticipada: #a8e6dc; --vacaciones: #fbe0b5; --espera: #fdeb9c; --conflicto: #f6b3b0;
   }
@@ -14,8 +14,19 @@
   [hidden] { display: none !important; }
   html { -webkit-text-size-adjust: 100%; }
   body { margin: 0; background: var(--fondo); color: var(--texto); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
-  header { background: var(--primario); color: #fff; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  header { background: #121826; color: #fff; padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   header b { font-size: 17px; }
+  .marca-app { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .marca-app img { width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0; }
+  .marca-app span { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+  .marca-app small { font-size: 13px; color: #c9d1de; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .portada { text-align: center; margin: 8px 0 14px; }
+  .portada img { width: 72px; height: 72px; border-radius: 18px; }
+  .portada h1 { font-size: 30px; margin: 6px 0 0; letter-spacing: -0.5px; }
+  .portada .lema { font-weight: 600; margin: 2px 0 0; }
+  .portada .servicio { color: var(--suave); font-size: 13px; margin: 2px 0 0; }
+  a.chico-link { display: block; text-align: center; color: var(--suave); font-size: 14px; padding: 12px; }
+  button:focus-visible, a:focus-visible { outline: 3px solid #121826; outline-offset: 2px; }
   header button { background: none; border: 1px solid #ffffff80; color: #fff; border-radius: 8px; padding: 6px 10px; font-size: 14px; cursor: pointer; }
   main { max-width: 720px; margin: 0 auto; padding: 12px 16px 96px; }
   main.ancho { max-width: 1200px; }
@@ -27,8 +38,8 @@
   .suave { color: var(--suave); font-size: 14px; }
   .error { background: #fde4e3; border: 1px solid #efb0ad; color: #8c1d18; padding: 10px 14px; border-radius: 10px; margin-bottom: 12px; }
   .ok { background: #e1f5e6; border: 1px solid #a8dbb5; color: #17602d; padding: 10px 14px; border-radius: 10px; margin-bottom: 12px; }
-  button.grande, a.grande { display: block; width: 100%; min-height: 52px; padding: 12px 14px; margin-bottom: 10px; font-size: 17px; font-weight: 600; border-radius: 12px; border: 1px solid var(--primario); background: var(--primario); color: var(--primario-texto); cursor: pointer; text-align: center; text-decoration: none; }
-  button.sec { background: #fff; color: var(--primario); }
+  button.grande, a.grande { display: block; width: 100%; min-height: 52px; padding: 12px 14px; margin-bottom: 10px; font-size: 17px; font-weight: 600; border-radius: 12px; border: 1px solid var(--acento-borde); background: var(--acento); color: var(--primario-texto); cursor: pointer; text-align: center; text-decoration: none; }
+  button.sec, a.sec { background: #fff; color: var(--primario); border-color: var(--primario); }
   button.peligro { background: #fff; color: #a3211c; border-color: #a3211c; }
   button.chico { min-height: 40px; padding: 6px 12px; font-size: 14px; font-weight: 600; border-radius: 8px; border: 1px solid var(--primario); background: #fff; color: var(--primario); cursor: pointer; margin: 0 6px 6px 0; }
   button:disabled { opacity: .55; cursor: wait; }
@@ -67,10 +78,10 @@
   .marca { background: #fff0c2; border-radius: 6px; padding: 1px 6px; font-size: 12px; }
   .opciones { display: flex; gap: 6px; }
   .opciones button { flex: 1 1 0; min-height: 48px; padding: 6px; font-size: 15px; font-weight: 600; border-radius: 10px; border: 1px solid var(--primario); background: #fff; color: var(--primario); cursor: pointer; }
-  .opciones button[aria-pressed=true] { background: var(--primario); color: #fff; }
+  .opciones button[aria-pressed=true] { background: var(--acento); color: var(--primario); border-width: 2px; }
   .opciones button:disabled { opacity: .45; cursor: not-allowed; }
   #fijo { position: fixed; left: 0; right: 0; bottom: 58px; padding: 8px 16px; background: linear-gradient(transparent, var(--fondo) 30%); z-index: 4; }
-  #fijo button { display: block; width: 100%; max-width: 688px; margin: 0 auto; min-height: 52px; font-size: 17px; font-weight: 700; border-radius: 12px; border: none; background: #17602d; color: #fff; cursor: pointer; box-shadow: 0 2px 6px #0003; }
+  #fijo button { display: block; width: 100%; max-width: 688px; margin: 0 auto; min-height: 52px; font-size: 17px; font-weight: 700; border-radius: 12px; border: 1px solid var(--acento-borde); background: var(--acento); color: var(--primario); cursor: pointer; box-shadow: 0 2px 6px #0003; }
   main.confijo { padding-bottom: 170px; }
   .progreso { margin: 4px 0 6px; }
   .progreso .barra { height: 8px; background: #dfe5ec; border-radius: 4px; overflow: hidden; margin-top: 4px; }
@@ -82,12 +93,12 @@
   .pasos-ios { list-style: none; padding: 0; margin: 0; }
   .pasos-ios li { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid #edf0f4; }
   .pasos-ios li:last-child { border-bottom: none; }
-  .pasos-ios img { width: 120px; height: 84px; flex-shrink: 0; border-radius: 10px; border: 1px solid var(--borde); background: #fff; }
+  #i-menu img, .pasos-ios img { width: 120px; height: 84px; flex-shrink: 0; border-radius: 10px; border: 1px solid var(--borde); background: #fff; }
 </style>
 </head>
 <body><div id="demo-cartel" style="background:#b45309;color:#fff;padding:8px 12px;font:600 14px/1.35 system-ui,Arial,sans-serif;text-align:center">
   DEMO — datos de prueba
-  <div style="font-weight:400;font-size:12px;margin-top:2px">Todos los PIN: 1111 · Jefe: JAVIER GARCIA · PAULA RIOS: registro desde cero · SOFIA LUNA: solo reemplazos · Los avisos se ven acá arriba (simulados): no usa la planilla real ni manda mensajes</div>
+  <div style="font-weight:400;font-size:12px;margin-top:2px">Todos los PIN: 1111 · Código del servicio para registrarse: DEMO24 · Jefe: JAVIER GARCIA · PAULA RIOS: registro desde cero · SOFIA LUNA: solo reemplazos · Los avisos se ven acá arriba (simulados): no usa la planilla real ni manda mensajes</div>
   <div style="margin-top:6px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
     <button type="button" id="demo-recordatorio" style="font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer">Simular el aviso de las 8:00</button>
     <button type="button" id="demo-mensajes" style="font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer">Avisos y mails enviados</button>
@@ -107,7 +118,7 @@
   document.getElementById('demo-reiniciar').onclick = async () => {
     (await window.demoServidor()).demoReiniciar();
     try { Object.keys(localStorage).forEach((k) => { if (/guardia/i.test(k)) localStorage.removeItem(k); }); } catch (e) {}
-    try { sessionStorage.removeItem('guardias-demo-instalada'); } catch (e) {}
+    try { sessionStorage.removeItem('guardias-demo-instalada'); sessionStorage.removeItem('ficha_navegador'); } catch (e) {}
     location.href = location.pathname;
   };
   document.getElementById('demo-recordatorio').onclick = async () => {
@@ -126,13 +137,14 @@
   };
 })();
 </script>
-<header id="cab" hidden><b id="cab-nombre"></b><span><button id="btn-jefe" hidden></button> <button id="btn-salir">Salir</button></span></header>
+<header id="cab" hidden><span class="marca-app"><img class="logo-app" alt=""><span><b>Fichá</b><small id="cab-nombre"></small></span></span><span><button id="btn-jefe" hidden></button> <button id="btn-salir">Salir</button></span></header>
 <main id="app"><div class="cargando">Cargando…</div></main>
 <div id="fijo" hidden><button id="btn-cargar">+ Cargar guardia</button></div>
 <nav id="nav" hidden></nav>
 <script>
 // DEMO: google.script.run llama al simulador que corre en un marco oculto (servidor.html).
 // Los avisos push se simulan: aparecen arriba de la pantalla como una notificación, con sus botones.
+window.GUARDIAS_CONFIG = { instalable: true }; // la demo también muestra la pantalla "Instalá Fichá"
 (function () {
   const marco = document.createElement('iframe');
   marco.src = 'servidor.html';
@@ -150,7 +162,7 @@
   window.GuardiasPush = {
     demo: true,
     soportado: () => true,
-    instalada: () => !ios || ssLeer('guardias-demo-instalada') === '1',
+    instalada: () => ssLeer('guardias-demo-instalada') === '1',
     simularInstalacion: () => { try { sessionStorage.setItem('guardias-demo-instalada', '1'); } catch (e) {} },
     async activar() {
       let t = lsLeer('guardias-demo-celular');
@@ -172,7 +184,7 @@
     n.style.cssText = 'background:#fff;border-radius:16px;box-shadow:0 6px 24px rgba(0,0,0,.25);padding:10px 12px;font:14px/1.35 system-ui,Arial,sans-serif;color:#1c2733;cursor:pointer';
     const cab = document.createElement('div');
     cab.style.cssText = 'font-size:12px;color:#5b6876;margin-bottom:2px';
-    cab.textContent = '🔔 Guardias UPA · ahora · (aviso simulado)';
+    cab.textContent = '🔔 Fichá · ahora · (aviso simulado)';
     const t = document.createElement('b'); t.textContent = p.titulo;
     const c = document.createElement('div'); c.textContent = p.cuerpo;
     n.append(cab, t, c);
@@ -186,13 +198,13 @@
         b.type = 'button';
         b.className = 'demo-noti-accion';
         b.textContent = a.titulo;
-        b.style.cssText = 'font:600 14px system-ui,Arial,sans-serif;color:#1a56a8;background:none;border:none;padding:6px 0;cursor:pointer';
+        b.style.cssText = 'font:600 14px system-ui,Arial,sans-serif;color:#121826;background:none;border:none;padding:6px 0;cursor:pointer';
         b.onclick = (ev) => {
           ev.stopPropagation();
           cerrar();
           if (!a.firma) { location.href = a.url; return; }
           const r = s.demoAccion(a.firma);
-          window.demoNotificar({ titulo: 'Guardias UPA', cuerpo: r.ok ? r.texto : r.error, url: p.url, acciones: [] }, s);
+          window.demoNotificar({ titulo: 'Fichá', cuerpo: r.ok ? r.texto : r.error, url: p.url, acciones: [] }, s);
           if (typeof window.ir === 'function') window.ir('mes');
         };
         fila.appendChild(b);
@@ -225,6 +237,9 @@ const INICIO = (function () {
   return { v: /^[a-z]{1,20}$/.test(p.get('v') || '') ? p.get('v') : '', g: /^\d{1,9}$/.test(p.get('g') || '') ? p.get('g') : '' };
 })();
 const CLAVE = 'guardias_upa_sesion';
+const LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAFfElEQVR4nOybf0gbZxjHv3dqGjVqq+2yDmxXKBlsNVuhjpZRW7uum13HpFjIVqFjRQaO6WhHRzfYH7J1IFWM0FKnKyukQzZXHBt1TGe7yuhwY8zolPqfFNyCxhkT80tz1/eSVO8u5tddrmjOD6jne2/e5Pne877v87z6ZCIB2OGDB8GyFWCxDxSeIk1byBeF1QVLvqbI93vkk90FRfVQJbdvx3tRTCPY4bK3wVLvk8sSrE2GQbEtVMmdq9E6rCgA+3f5M6CZVnJ5COlBPxi6jnru1j/iGxECsNb9rwN0J7nUIr3wAoyJMg58z28UCBA2vhtpDVPJF2FJgLDb/4n0e/JivGQ67Hk4Heil5tCcT3fjObRhW4MEBQiu9umz4CXCobDNYQ8IbXXqImwzFQ5ybkGNUFR5ZjDCUyvEdjoY3qoVYntmOLZXJ8T2TIQSG7WyhRMgNVldgMX4X25YfvCia2QBNhcbatfQ0O/Q4OSRXFS/rMF2TRJjevy41ObBeLT7hhyYj2ZBBhTFWg+wkIljZB7vfDqH3pl4PWm8VLMJbSc0KEB8Bi/bUNHNRO9wuBD2cxsgBxoyGb85g91nEjGeg0Fvux27G31wxOt634X6WManCHkCjMzhlZYoxugyoN+88vCOvhlUfruI6DCwtDoFrq8t34huUyZSjQwBGHzZMS8ynsb+miKM/rgV9huPYfRrPew9j+PuZ7l4PkP4amu7A5bplUd2/DaHD4f4LVqY38vGtrzUH0JJF2DSg45RYZORGN9N5reev9BlUDCU5qPnizwYBL396BpcwcUDflxo8nDJ+xKGmnxU6aAIkgXw3fOLVudsfHQ8hosW5+LsXmHTwNhCRDfrtVl0uHgNeh3ajmdAKSRPqv+mA8KGHVkwxPycFArET1E0BCbnUd/Jb6RRXaeDUTn7pQugfVKLav4eTEKKeIcJvkCsuwy6rszBym/am4+GUmUPnyULoC/VwVyaxAtcHlhEOadh2/Kj9f3hxLnf+Xc1MNdlJxQvyCH1+8pK+BfRfH4WvYJGGmW7wm8fWMDFVrdgR9luykf1ZiiOsgIEw2MXPmlyRQZKz+bhzK7Q5cQNB5ptvHu6XFw5JSvETZjUC+BnMD7kwaVv3OgaWhRsZ8tkoaEuB3ructqN+nb+bkCj6qwuIm5QipQJ4Jv0ocPixIW+hShGh9FtgNlciOpi7hcWvVedGODfJ57R8ILsCD1h5AsQYDBo+R8V1/1xOtIwHi3AV7Xa5YzQ5iaC8YOhLHz80DMeETIFIMlN0xRMfdGTFu0TGlS9qsO7xzbAkC26GYDIWxjc+c6BiShjzY6L9tFhkjC18EaQkB7LSodtN+14uiXyyWt3alFbkYsThzWRRvMhgc++t+ai5/vJIiE9lu4BJGZvviwynszvxsZNOL1ztf3lPDrSBRjzwiKwn8xfsridLsaaQrIAE2N+4fwt1uJYssbrc/BTZ3bsXYP/nt12VHTyzhHKNmK0lufymuQ9T7IADqdo4bs/j8o33UgG4xtF6HwtI+Fw1ys+D+DOGwvlbZmSBbCJs0GygtumkRQTiT56BXl0EccqRfUCpORYfC2zPgWgctYFgMpZFwAqR/UCKHYo+vk1Jy5edyEVfHBSh/On8qAEigVCRUf+RSqx/7wVSrC+BkAhOLddjWOJ4aYAl9ivnTOs1MJyHjAF9TJFB2ts1AqxnQ4WGKkVYjvNVVdBrXCVZdxPshBy/5ewVivDpDJMGX81hrZBim2B2gjbvFwzZD3wC9RTNdJPnv6L3MVyIMTQdQBWwUG14njDtgZZEiBURcWYkPYwJn4BpSAUDtXTMZVIT0/wimsGOSJygWAHht4Drtw0fegP1gqKjOdYL55GAqRz+fwDAAAA//9Pf5kaAAAABklEQVQDAO+syCI+X4KmAAAAAElFTkSuQmCC';
+const LEMA = 'Fichás tu guardia, cobrás tu guardia.';
+document.querySelectorAll('img.logo-app').forEach((i) => { i.src = LOGO; });
 const DIAS_CAB = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 const TIPOS = { CONTRATO: 'Contrato', REEMPLAZO_HOSPITAL: 'Paga el hospital', COBERTURA_COMPANERO: 'Paga el compañero' };
 const ESTADOS = { PREVISTA: 'Prevista', CONFIRMADA: 'Confirmada', CONFIRMADA_ANTICIPADA: 'Confirmada por adelantado', ESPERANDO_CONFIRMACION_TITULAR: 'Esperando confirmación', EN_CONFLICTO: 'En conflicto', ANULADA: 'Anulada' };
@@ -311,10 +326,19 @@ function navMes(titulo, cambiar) {
 }
 
 // --- Ingreso ---
-async function pantallaLogin() {
+function portada() {
+  return el('div', { class: 'portada' }, el('img', { src: LOGO, alt: '' }), el('h1', null, 'Fichá'),
+    el('p', { class: 'lema' }, LEMA), el('p', { class: 'servicio' }, 'UTI UPA 5'));
+}
+function ocultarMarco() {
   $('cab').hidden = true;
   $('nav').hidden = true;
   $('fijo').hidden = true;
+}
+async function pantallaLogin() {
+  ocultarMarco();
+  if (debeMostrarInstalacion()) return pantallaInstalar();
+  vista = 'mes';
   cargando();
   google.script.run.withSuccessHandler((lista) => {
     const sel = el('select', { id: 'quien' }, el('option', { value: '' }, 'Elegí tu nombre…'), lista.map((m) => el('option', { value: m.id }, m.nombre)));
@@ -331,13 +355,128 @@ async function pantallaLogin() {
         error.textContent = r.error; error.hidden = false; boton.disabled = false; pin.value = '';
       }).withFailureHandler(() => { error.textContent = 'No hay conexión. Probá de nuevo.'; error.hidden = false; boton.disabled = false; }).login(sel.value, pin.value);
     } }, el('label', { htmlFor: 'quien' }, 'Nombre'), sel, el('label', { htmlFor: 'pin' }, 'PIN'), pin, el('br'), boton);
-    pintar(el('h2', null, 'Guardias UTI UPA 5'), error, el('div', { class: 'tarjeta' }, form), el('div', { class: 'regla' }, 'Cargar es la forma de cobrar: lo que no esté confirmado al cierre del mes se reclama en el cierre siguiente.'));
+    pintar(portada(), error, el('div', { class: 'tarjeta' }, form),
+      el('button', { class: 'grande sec', id: 'btn-registrarme', onclick: () => pantallaAutoRegistro() }, 'No estoy en la lista → Registrarme'),
+      el('div', { class: 'regla' }, 'Cargar es la forma de cobrar: lo que no esté confirmado al cierre del mes se reclama en el cierre siguiente.'));
   }).withFailureHandler(() => mostrarError(new Error('No hay conexión. Probá de nuevo.'))).medicosPublico();
+}
+
+// "No estoy en la lista": código del servicio + nombre y apellido + PIN. Después sigue el registro de siempre.
+function nombreComoExcel(t) {
+  return String(t || '').toUpperCase().replace(/Ñ/g, '\u0001').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\u0001/g, 'Ñ').replace(/[^A-ZÑ' -]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function pantallaAutoRegistro() {
+  ocultarMarco();
+  const codigo = el('input', { id: 'a-codigo', autocapitalize: 'characters', autocomplete: 'off', spellcheck: false, maxLength: 12 });
+  const nombre = el('input', { id: 'a-nombre', autocapitalize: 'words', autocomplete: 'name', maxLength: 60 });
+  const como = el('div', { class: 'suave', id: 'a-como' });
+  const verComo = () => { const n = nombreComoExcel(nombre.value); como.textContent = n ? 'Vas a figurar como: ' + n : 'Así va al Excel: en mayúsculas y sin tildes.'; };
+  nombre.addEventListener('input', verComo);
+  verComo();
+  const a = el('input', { id: 'a-pin', type: 'password', inputMode: 'numeric', maxLength: 4, pattern: '[0-9]*', autocomplete: 'new-password' });
+  const b = el('input', { id: 'a-pin2', type: 'password', inputMode: 'numeric', maxLength: 4, pattern: '[0-9]*', autocomplete: 'new-password' });
+  const error = el('div', { class: 'error', hidden: true, role: 'alert' });
+  const caja = el('div', { id: 'a-parecido' });
+  const boton = el('button', { class: 'grande', type: 'submit', id: 'a-seguir' }, 'Siguiente');
+  const enviar = (otraPersona) => {
+    error.hidden = true;
+    caja.replaceChildren();
+    const fallar = (t) => { error.textContent = t; error.hidden = false; boton.disabled = false; error.scrollIntoView({ block: 'center' }); };
+    if (!codigo.value.trim()) return fallar('Escribí el código del servicio.');
+    if (nombreComoExcel(nombre.value).split(' ').length < 2) return fallar('Escribí tu nombre y tu apellido.');
+    if (!/^\d{4}$/.test(a.value)) return fallar('El PIN tiene que tener 4 números.');
+    if (a.value !== b.value) return fallar('Los dos PIN no coinciden.');
+    boton.disabled = true;
+    google.script.run.withSuccessHandler((r) => {
+      if (r.ok) { token = r.token; escribir(token); arrancar(); return; }
+      if (r.parecido) {
+        boton.disabled = false;
+        caja.replaceChildren(el('div', { class: 'regla', role: 'alert' }, el('b', null, r.error),
+          el('div', { style: 'margin-top:10px' },
+            r.activo ? el('button', { class: 'grande', type: 'button', id: 'a-soy', onclick: () => pantallaLogin() }, 'Sí, soy yo → volver a la lista') : null,
+            r.puede_seguir ? el('button', { class: 'grande sec', type: 'button', id: 'a-otra', onclick: () => enviar(true) }, 'No, soy otra persona') : null)));
+        caja.scrollIntoView({ block: 'center' });
+        return;
+      }
+      fallar(r.error);
+    }).withFailureHandler(() => fallar('No hay conexión. Probá de nuevo.')).autoRegistro(codigo.value, nombre.value, a.value, !!otraPersona);
+  };
+  const form = el('form', { onsubmit: (ev) => { ev.preventDefault(); enviar(false); } },
+    el('label', { htmlFor: 'a-codigo', style: 'margin-top:0' }, 'Código del servicio'), codigo,
+    el('p', { class: 'suave', style: 'margin:4px 0 0' }, 'Te lo pasa un compañero o el jefe.'),
+    el('label', { htmlFor: 'a-nombre' }, 'Nombre y apellido'), nombre, como,
+    el('label', { htmlFor: 'a-pin' }, 'Creá tu PIN (4 números)'), a, el('label', { htmlFor: 'a-pin2' }, 'Repetilo'), b, el('br'), el('br'), boton);
+  pintar(el('h2', null, 'Registrarme'), error, caja, el('div', { class: 'tarjeta' }, form),
+    el('button', { class: 'grande sec', type: 'button', onclick: () => pantallaLogin() }, 'Volver'));
+}
+
+// --- Pantalla de instalación (solo en la app de GitHub Pages, abierta en el navegador sin instalar) ---
+let eventoInstalar = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); eventoInstalar = e; if (vista === 'instalar') pantallaInstalar(); });
+window.addEventListener('appinstalled', () => { eventoInstalar = null; if (vista === 'instalar') pantallaInstalar(true); });
+function sesionLeer(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+function sesionEscribir(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
+function debeMostrarInstalacion() {
+  const c = window.GUARDIAS_CONFIG;
+  return !!(c && c.instalable) && !instalada() && !INICIO.v && sesionLeer('ficha_navegador') !== '1';
+}
+function plataformaInstalar() {
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return 'ios';
+  return /Android/.test(ua) ? 'android' : 'otro';
+}
+function esSafariIOS() { return !/CriOS|FxiOS|EdgiOS|OPiOS|GSA\/|FBAN|FBAV|Instagram|Line\//.test(navigator.userAgent); }
+const IMG_MENU = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 84"><rect width="120" height="84" fill="#f1f3f4"/><rect x="0" y="0" width="120" height="22" fill="#fff" stroke="#dadce0"/><rect x="8" y="6" width="84" height="10" rx="5" fill="#f1f3f4"/><g fill="#3c4043"><circle cx="108" cy="6" r="2"/><circle cx="108" cy="11" r="2"/><circle cx="108" cy="16" r="2"/></g><rect x="40" y="28" width="76" height="46" rx="4" fill="#fff" stroke="#dadce0"/><text x="46" y="44" font-family="Arial" font-size="9" fill="#999">Historial</text><rect x="42" y="50" width="72" height="14" rx="3" fill="#fff3c4"/><text x="46" y="60" font-family="Arial" font-size="9" fill="#111" font-weight="700">Instalar app</text></svg>';
+function pasosIOS() {
+  return el('ol', { class: 'pasos-ios' },
+    el('li', null, svgImg(IMG_COMPARTIR, 'Botón Compartir de Safari'), el('span', null, el('b', null, '1. '), 'En Safari, tocá el botón ', el('b', null, 'Compartir'), ' (el cuadrado con la flecha hacia arriba).')),
+    el('li', null, svgImg(IMG_AGREGAR, 'Opción Agregar a pantalla de inicio'), el('span', null, el('b', null, '2. '), 'Bajá y tocá ', el('b', null, 'Agregar a pantalla de inicio'), '. Después, ', el('b', null, 'Agregar'), '.')),
+    el('li', null, svgImg(imgIcono(), 'Ícono de Fichá en la pantalla de inicio'), el('span', null, el('b', null, '3. '), 'Abrí ', el('b', null, 'Fichá'), ' desde ese ícono.')));
+}
+function pantallaInstalar(listo) {
+  vista = 'instalar';
+  ocultarMarco();
+  const p = plataformaInstalar();
+  const nodos = [portada()];
+  const android = () => {
+    if (listo) return [el('div', { class: 'ok', id: 'i-listo' }, '¡Listo! Abrí Fichá desde el ícono amarillo de tu pantalla de inicio.')];
+    if (eventoInstalar) {
+      return [el('button', { class: 'grande', id: 'i-instalar', onclick: async () => {
+        const ev = eventoInstalar;
+        eventoInstalar = null;
+        ev.prompt();
+        const r = await ev.userChoice.catch(() => null);
+        pantallaInstalar(!!(r && r.outcome === 'accepted'));
+      } }, 'Instalar Fichá'),
+      el('p', { class: 'suave' }, 'Queda como una app más en tu celular, con su ícono amarillo.')];
+    }
+    const menu = el('div', { class: 'regla', hidden: true, id: 'i-menu' }, el('div', { style: 'display:flex;gap:12px;align-items:center' }, svgImg(IMG_MENU, 'Menú de Chrome'),
+      el('span', null, 'Tocá el menú ', el('b', null, '⋮'), ' (arriba a la derecha) → ', el('b', null, '"Instalar app"'), ' o ', el('b', null, '"Agregar a la pantalla principal"'), '.')));
+    return [el('button', { class: 'grande', id: 'i-instalar', onclick: () => { menu.hidden = false; } }, 'Instalar Fichá'), menu];
+  };
+  const ios = () => esSafariIOS()
+    ? [el('h3', null, 'Agregala a tu pantalla de inicio'), el('div', { class: 'tarjeta' }, pasosIOS())]
+    : [el('div', { class: 'regla', id: 'i-safari' }, el('b', null, 'Abrí este link en Safari'), ' para poder instalarla. Copialo y pegalo en Safari.',
+        el('div', { style: 'margin-top:8px' }, el('button', { class: 'chico', type: 'button', onclick: (ev) => {
+          const b = ev.currentTarget;
+          (navigator.clipboard ? navigator.clipboard.writeText(location.href) : Promise.reject()).then(() => { b.textContent = 'Copiado ✓'; }, () => { b.textContent = location.href; });
+        } }, 'Copiar el link'))),
+      el('div', { class: 'tarjeta' }, pasosIOS())];
+  if (p === 'android') nodos.push(el('h3', null, 'Instalá la app en tu celular'), ...android());
+  else if (p === 'ios') nodos.push(...ios());
+  else nodos.push(el('p', null, 'Abrí este link desde tu celular para instalar Fichá.'),
+    el('h3', null, 'Si tenés Android'), ...android(), el('h3', null, 'Si tenés iPhone'), el('div', { class: 'tarjeta' }, pasosIOS()));
+  if (PUSH && PUSH.simularInstalacion) nodos.push(el('button', { class: 'chico', id: 'i-simular', onclick: () => { PUSH.simularInstalacion(); vista = 'mes'; arrancar(); } }, 'DEMO: simular que ya la instalé'));
+  nodos.push(el('a', { href: '#', class: 'chico-link', id: 'i-navegador', onclick: (ev) => { ev.preventDefault(); sesionEscribir('ficha_navegador', '1'); vista = 'mes'; arrancar(); } },
+    'Seguir en el navegador' + (p === 'ios' ? ' (así no te llegan los avisos)' : '')));
+  pintar(nodos);
 }
 
 function salir() { token = ''; escribir(''); datos = null; modoJefe = false; pantallaLogin(); }
 
 async function arrancar() {
+  if (debeMostrarInstalacion()) return pantallaInstalar();
   if (!token) return pantallaLogin();
   cargando();
   try { datos = await llamar('inicio'); } catch (e) { if (token) mostrarError(e); return; }
@@ -507,7 +646,9 @@ function instalada() {
 const svgImg = (svg, alt) => el('img', { src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg), alt: alt });
 const IMG_COMPARTIR = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 84"><rect width="120" height="84" fill="#f2f2f7"/><rect x="0" y="54" width="120" height="30" fill="#fff" stroke="#d1d1d6"/><g fill="none" stroke="#8e8e93" stroke-width="2.5" stroke-linecap="round"><path d="M14 69l6-6m-6 6l6 6"/><path d="M106 69l-6-6m6 6l-6 6"/></g><circle cx="60" cy="69" r="14" fill="#dbe7ff"/><g fill="none" stroke="#007aff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M54 66v9h12v-9"/><path d="M60 58v12"/><path d="M56 62l4-4 4 4"/></g><text x="60" y="30" font-family="Arial" font-size="12" fill="#333" text-anchor="middle">Safari, abajo</text></svg>';
 const IMG_AGREGAR = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 84"><rect width="120" height="84" fill="#f2f2f7"/><rect x="6" y="22" width="108" height="40" rx="8" fill="#fff" stroke="#d1d1d6"/><text x="12" y="39" font-family="Arial" font-size="10" fill="#111">Agregar a</text><text x="12" y="52" font-family="Arial" font-size="10" fill="#111">pantalla de inicio</text><rect x="94" y="33" width="15" height="15" rx="3.5" fill="none" stroke="#111" stroke-width="1.8"/><path d="M101.5 36.5v8M97.5 40.5h8" stroke="#111" stroke-width="1.8" stroke-linecap="round"/></svg>';
-const IMG_ICONO = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 84"><rect width="120" height="84" fill="#9db8d9"/><rect x="42" y="14" width="36" height="36" rx="9" fill="#1a56a8"/><rect x="51" y="23" width="18" height="16" rx="2.5" fill="#fff"/><rect x="51" y="23" width="18" height="5" rx="2" fill="#cfe0f7"/><path d="M55 32l3 3 6-6.5" fill="none" stroke="#17602d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><text x="60" y="66" font-family="Arial" font-size="10" fill="#fff" text-anchor="middle">Guardias UPA</text></svg>';
+function imgIcono() {
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 84"><rect width="120" height="84" fill="#9db8d9"/><image href="' + LOGO + '" x="42" y="12" width="36" height="36"/><text x="60" y="64" font-family="Arial" font-size="11" fill="#fff" text-anchor="middle">Fichá</text></svg>';
+}
 
 // Bloque de avisos. alCambiar() vuelve a dibujar la pantalla que lo usa.
 function bloqueAvisos(alCambiar, enPerfil) {
@@ -534,7 +675,7 @@ function bloqueAvisos(alCambiar, enPerfil) {
       el('ol', { class: 'pasos-ios' },
         el('li', null, svgImg(IMG_COMPARTIR, 'Botón Compartir de Safari'), el('span', null, el('b', null, '1. '), 'Tocá el botón ', el('b', null, 'Compartir'), ' (el cuadrado con la flecha hacia arriba).')),
         el('li', null, svgImg(IMG_AGREGAR, 'Opción Agregar a pantalla de inicio'), el('span', null, el('b', null, '2. '), 'Bajá y tocá ', el('b', null, 'Agregar a pantalla de inicio'), '. Después, ', el('b', null, 'Agregar'), '.')),
-        el('li', null, svgImg(IMG_ICONO, 'Ícono de Guardias UPA en la pantalla de inicio'), el('span', null, el('b', null, '3. '), 'Abrí ', el('b', null, 'Guardias UPA'), ' desde ese ícono, volvé a este paso y tocá ', el('b', null, 'Activar avisos'), '.'))),
+        el('li', null, svgImg(imgIcono(), 'Ícono de Fichá en la pantalla de inicio'), el('span', null, el('b', null, '3. '), 'Abrí ', el('b', null, 'Fichá'), ' desde ese ícono, volvé a este paso y tocá ', el('b', null, 'Activar avisos'), '.'))),
       el('p', { class: 'suave' }, 'Necesitás iOS 16.4 o más nuevo. Lo que ya cargaste queda guardado.'),
       PUSH.simularInstalacion ? el('button', { class: 'chico', id: 'push-simular-ios', onclick: () => { PUSH.simularInstalacion(); alCambiar(); } }, 'DEMO: simular que ya la agregué') : null);
   } else {

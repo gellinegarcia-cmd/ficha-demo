@@ -10,6 +10,7 @@
   reiniciarEstado_();
   crearHojas_();
   cargarDatosIniciales_();
+  setCfg_('codigo_servicio', 'DEMO24');
   // Firebase simulado: los avisos no salen a ningún lado, se ven en la página.
   setPropiedad_('FCM_SA', JSON.stringify({ project_id: 'guardias-demo', client_email: 'demo@guardias-demo.iam.gserviceaccount.com', private_key: 'DEMO' }));
 
@@ -66,7 +67,7 @@
 
   // Lo que se hace en la demo se guarda solo en esta pestaña y se repite al recargar la página.
   const CLAVE = 'guardias-demo-llamadas';
-  const PERMITIDAS = ['api', 'login', 'medicosPublico'];
+  const PERMITIDAS = ['api', 'login', 'medicosPublico', 'autoRegistro'];
   let llamadas = [];
   try { llamadas = JSON.parse(sessionStorage.getItem(CLAVE) || '[]'); } catch (e) { llamadas = []; }
   // Además de las llamadas de la app, se repiten los botones tocados en un aviso y el recordatorio simulado.

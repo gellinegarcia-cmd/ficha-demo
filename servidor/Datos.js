@@ -46,7 +46,7 @@ function libro_() {
 
 function hoja_(nombre) {
   const h = libro_().getSheetByName(nombre);
-  if (!h) throw new Error('Falta la hoja ' + nombre + '. Ejecutá "Instalar" desde el menú Guardias UPA.');
+  if (!h) throw new Error('Falta la hoja ' + nombre + '. Ejecutá "Instalar" desde el menú Fichá.');
   return h;
 }
 

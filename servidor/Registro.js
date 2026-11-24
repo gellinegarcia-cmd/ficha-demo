@@ -179,3 +179,100 @@ function prepararRegistroPropio_() {
   registrar_('sistema', 'registro_propio', n + ' filas de guardia fija cargadas desde la grilla quedaron sin vigencia');
   return n;
 }
+
+// ---------- Auto-registro: "No estoy en la lista → Registrarme" ----------
+// Pide el código del servicio (CONFIG.codigo_servicio), nombre y apellido y un PIN propio. Queda activo sin
+// aprobación y sigue con el registro de siempre (desde el paso 2). Si el código está vacío, el auto-registro está cerrado.
+const MAX_FALLOS_CODIGO_DIA = 20;
+const MAX_ALTAS_DIA = 15;
+const LETRAS_CODIGO = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // sin I, L, O, 0 ni 1, que se confunden
+
+function nuevoCodigoServicio_() {
+  let s = '';
+  for (let i = 0; i < 6; i++) s += LETRAS_CODIGO.charAt(Math.floor(Math.random() * LETRAS_CODIGO.length));
+  return s;
+}
+
+// Como va al Excel: MAYÚSCULAS, sin tildes (la Ñ se conserva), un solo espacio entre palabras.
+function normalizarNombre_(t) {
+  return String(t || '').toUpperCase().replace(/Ñ/g, '\u0001').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\u0001/g, 'Ñ').replace(/[^A-ZÑ' -]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function distancia_(a, b) {
+  const d = [];
+  for (let i = 0; i <= a.length; i++) d[i] = [i];
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+  }
+  return d[a.length][b.length];
+}
+
+// ¿Puede ser la misma persona? Mismo nombre con otro orden, 2 palabras en común, un error de tipeo,
+// o el mismo apellido con la misma inicial del nombre.
+function seParece_(a, b) {
+  const sinEnie = function (x) { return x.replace(/Ñ/g, 'N'); };
+  a = sinEnie(a); b = sinEnie(b);
+  if (a === b || distancia_(a, b) <= 2) return true;
+  const pa = a.split(' '), pb = b.split(' ');
+  if (pa.slice().sort().join(' ') === pb.slice().sort().join(' ')) return true;
+  const comunes = pa.filter(function (p) { return p.length >= 3 && pb.indexOf(p) >= 0; });
+  if (comunes.length >= 2) return true;
+  return comunes.some(function (p) { return p.length >= 4 && p !== pa[0] && p !== pb[0]; }) && pa[0].charAt(0) === pb[0].charAt(0);
+}
+
+function cupoAutoRegistro_() {
+  let c;
+  try { c = JSON.parse(propiedad_('autoregistro') || '{}') || {}; } catch (e) { c = {}; }
+  if (c.dia !== hoy_()) c = { dia: hoy_(), fallos: 0, altas: 0 };
+  return c;
+}
+
+// Pública (la llama la pantalla de ingreso, sin sesión). otraPersona = true cuando dijo "No, soy otra persona".
+function autoRegistro(codigo, nombre, pin, otraPersona) {
+  reiniciarEstado_();
+  return conLock_(function () {
+    const cupo = cupoAutoRegistro_();
+    const guardarCupo = function () { setPropiedad_('autoregistro', JSON.stringify(cupo)); };
+    if (cupo.fallos >= MAX_FALLOS_CODIGO_DIA) return { ok: false, error: 'Demasiados intentos hoy. Probá mañana o pedile al jefe que te cargue.' };
+    if (cupo.altas >= MAX_ALTAS_DIA) return { ok: false, error: 'Hoy ya se registraron muchos médicos. Probá mañana o pedile al jefe que te cargue.' };
+    const esperado = String(cfg_('codigo_servicio')).toUpperCase().replace(/\s/g, '');
+    if (!esperado) return { ok: false, error: 'El registro está cerrado. Pedile al jefe que te cargue.' };
+    if (String(codigo || '').toUpperCase().replace(/\s/g, '') !== esperado) {
+      cupo.fallos++;
+      guardarCupo();
+      registrar_('sistema', 'auto_registro_codigo_incorrecto', '');
+      return { ok: false, error: 'El código del servicio no es correcto. Pedíselo a un compañero o al jefe.' };
+    }
+    const n = normalizarNombre_(nombre);
+    if (n.split(' ').length < 2 || n.replace(/[^A-ZÑ]/g, '').length < 5 || n.length > 60) {
+      return { ok: false, error: 'Escribí tu nombre y tu apellido.' };
+    }
+    if (!/^\d{4}$/.test(String(pin || ''))) return { ok: false, error: 'El PIN tiene que tener 4 números.' };
+
+    const todos = medicos_(true);
+    const igual = todos.find(function (m) { return normalizarNombre_(m.nombre_apellido).replace(/Ñ/g, 'N') === n.replace(/Ñ/g, 'N'); });
+    const parecido = igual || (otraPersona ? null : todos.find(function (m) { return seParece_(n, normalizarNombre_(m.nombre_apellido)); }));
+    if (parecido) {
+      const activo = esSi_(parecido.activo);
+      return {
+        ok: false, parecido: parecido.nombre_apellido, activo: activo, puede_seguir: !igual,
+        error: activo ? '¿Sos ' + parecido.nombre_apellido + '? Elegilo de la lista.'
+          : 'Ya hay un médico cargado como ' + parecido.nombre_apellido + ', pero todavía no está habilitado. Si sos vos, pedile al jefe que te active.'
+      };
+    }
+
+    const id = siguienteId_('MEDICOS');
+    const m = insertar_('MEDICOS', {
+      id: id, nombre_apellido: n, pin: hashPin_(id, String(pin)), email: '', telegram_chat_id: '', activo: true, es_admin: false,
+      contrato_revisado: false, vinculo: '', pin_propio: true, registro: ''
+    });
+    cupo.altas++;
+    guardarCupo();
+    registrar_(n, 'auto_registro', 'se registró solo con el código del servicio');
+    return { ok: true, token: crearSesion_(m), nombre: n };
+  });
+}

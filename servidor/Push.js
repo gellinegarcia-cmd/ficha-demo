@@ -5,7 +5,7 @@
 // worker manda la "firma" del botón al servidor (accionAviso_). Los demás abren la pantalla de confirmar.
 //
 // Configuración (Script Properties): FCM_SA = el JSON de la cuenta de servicio de Firebase
-// (menú Guardias UPA → "2. Configurar avisos push").
+// (menú Fichá → "2. Configurar avisos push").
 
 const FCM_TTL_SEG = 86400;
 const HORAS_FIRMA_ACCION = 72;
@@ -76,7 +76,7 @@ function quitarPush_(m) {
 
 function pushPrueba_(m) {
   if (!pushActivo_(m)) throw new ErrorUsuario('Primero activá los avisos en este celular.');
-  const ok = enviarPushA_(m, 'Guardias UPA', 'Aviso de prueba: si lo ves, los avisos funcionan. ✅', null);
+  const ok = enviarPushA_(m, 'Fichá', 'Aviso de prueba: si lo ves, los avisos funcionan. ✅', null);
   if (!ok) throw new ErrorUsuario('El aviso de prueba no salió. Probá activar los avisos de nuevo.');
   registrar_(m.nombre_apellido, 'push_prueba', '');
   return { ok: true };

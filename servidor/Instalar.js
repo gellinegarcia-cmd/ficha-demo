@@ -7,7 +7,8 @@ const CONFIG_INICIAL = [
   ['hora_excel', '08:00', 'Hora en que llega el Excel el día de corte.'],
   ['valor_guardia_12', '', 'Opcional: valor de la guardia de 12 h.'],
   ['valor_guardia_24', '', 'Opcional: valor de la guardia de 24 h.'],
-  ['url_app', '', 'Dirección de la app. Se completa sola; se puede corregir a mano.']
+  ['url_app', '', 'Dirección de la app. Se completa sola; se puede corregir a mano.'],
+  ['codigo_servicio', '', 'Código para registrarse solo ("No estoy en la lista"). Cambialo cuando quieras; vacío = registro cerrado.']
 ];
 
 const FERIADOS_INICIALES = [
@@ -84,7 +85,7 @@ function crearHojas_() {
 function cargarDatosIniciales_() {
   const claves = filas_('CONFIG').map(function (c) { return c.clave; });
   CONFIG_INICIAL.forEach(function (c) {
-    if (claves.indexOf(c[0]) < 0) insertar_('CONFIG', { clave: c[0], valor: c[1], para_que_sirve: c[2] });
+    if (claves.indexOf(c[0]) < 0) insertar_('CONFIG', { clave: c[0], valor: c[0] === 'codigo_servicio' ? nuevoCodigoServicio_() : c[1], para_que_sirve: c[2] });
   });
   const fechas = filas_('FERIADOS').map(function (f) { return f.fecha; });
   FERIADOS_INICIALES.forEach(function (f) {
@@ -123,7 +124,7 @@ function soloDueno_() {
 }
 
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu('Guardias UPA')
+  SpreadsheetApp.getUi().createMenu('Fichá')
     .addItem('1. Instalar', 'instalar')
     .addItem('2. Configurar avisos push', 'configurarPush')
     .addSeparator()

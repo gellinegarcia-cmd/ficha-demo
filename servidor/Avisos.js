@@ -23,14 +23,14 @@ function avisar_(medico, texto, botones, op) {
   let entregado = false;
   if (pushActivo_(medico)) {
     try {
-      entregado = enviarPushA_(medico, op.asunto || 'Guardias UPA', texto, botones);
+      entregado = enviarPushA_(medico, op.asunto || 'Fichá', texto, botones);
     } catch (e) {
       registrar_('sistema', 'error_push', medico.nombre_apellido + ': ' + e.message);
     }
   }
   if (!entregado && medico.email) {
     try {
-      enviarMailAviso_(medico.email, op.asunto || 'Guardias UPA', completo, botones);
+      enviarMailAviso_(medico.email, op.asunto || 'Fichá', completo, botones);
       entregado = true;
     } catch (e) {
       registrar_('sistema', 'error_mail', medico.nombre_apellido + ': ' + e.message);
@@ -55,7 +55,7 @@ function enviarMailAviso_(para, asunto, texto, botones) {
         escaparXml_(b.textoMail || b.texto) + '</a>';
     });
   });
-  MailApp.sendEmail({ to: para, subject: asunto, body: texto, htmlBody: html + '</div>', name: 'Guardias UPA' });
+  MailApp.sendEmail({ to: para, subject: asunto, body: texto, htmlBody: html + '</div>', name: 'Fichá' });
 }
 
 // [La hice] confirma desde la notificación; [Me cubrieron] abre la guardia para elegir quién.

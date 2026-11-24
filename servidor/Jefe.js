@@ -238,7 +238,7 @@ function apiGuardarFijaDe_(jefe, a) {
   return { ok: true };
 }
 
-const CONFIG_EDITABLE = ['hora_recordatorio', 'dia_corte', 'hora_excel', 'valor_guardia_12', 'valor_guardia_24', 'url_app'];
+const CONFIG_EDITABLE = ['hora_recordatorio', 'dia_corte', 'hora_excel', 'valor_guardia_12', 'valor_guardia_24', 'url_app', 'codigo_servicio'];
 
 function apiAjustes_() {
   return {
@@ -257,6 +257,7 @@ function apiGuardarConfig_(jefe, a) {
   if (/^hora_/.test(clave) && !/^([01]\d|2[0-3]):[0-5]\d$/.test(valor)) throw new ErrorUsuario('Escribí la hora como 08:00.');
   if (clave === 'dia_corte' && !/^([1-9]|1\d|2[0-8])$/.test(valor)) throw new ErrorUsuario('Elegí un día entre 1 y 28.');
   if (clave === 'url_app' && valor && !/^https:\/\//.test(valor)) throw new ErrorUsuario('La dirección tiene que empezar con https://');
+  if (clave === 'codigo_servicio' && valor && !/^[A-Za-z0-9]{4,12}$/.test(valor)) throw new ErrorUsuario('El código: de 4 a 12 letras o números, sin espacios (o vacío para cerrar el registro).');
   setCfg_(clave, valor);
   registrar_(jefe.nombre_apellido, 'config', clave + ' = ' + valor);
   return apiAjustes_();

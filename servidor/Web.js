@@ -14,7 +14,7 @@ function doGet(e) {
     g: /^\d{1,9}$/.test(p.g || '') ? p.g : ''
   });
   return t.evaluate()
-    .setTitle('Guardias UPA')
+    .setTitle('Fichá')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
@@ -144,7 +144,7 @@ function doPost(e) {
   let r;
   try {
     const p = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    const rutas = { api: api, login: login, medicosPublico: medicosPublico, accionAviso: accionAviso_ };
+    const rutas = { api: api, login: login, medicosPublico: medicosPublico, autoRegistro: autoRegistro, accionAviso: accionAviso_ };
     const a = Array.isArray(p.args) ? p.args : [];
     r = Object.prototype.hasOwnProperty.call(rutas, p.f) ? rutas[p.f].apply(null, a) : { ok: false, error: 'Pedido desconocido.' };
   } catch (err) {

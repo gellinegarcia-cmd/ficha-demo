@@ -297,7 +297,7 @@ function entregarExcel_(mes, op) {
       body: cuerpo.texto,
       htmlBody: cuerpo.html,
       attachments: [blob],
-      name: 'Guardias UPA'
+      name: 'Fichá'
     });
   } catch (e) {
     try { borrarDeDrive_(archivo.id); } catch (e2) { console.error(e2); }

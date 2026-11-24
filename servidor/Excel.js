@@ -190,9 +190,24 @@ function zipSinComprimir_(archivos) {
 // medida que se confirman los reemplazos. Misma estructura que la planilla de RRHH.
 function marcarMesSucio_(mes) { if (mes) _mesesSucios[mes] = true; }
 
-function refrescarMesesSucios_() {
-  Object.keys(_mesesSucios).forEach(refrescarPestanaMes_);
+// Los meses tocados por las pantallas se anotan y el automatismo (cada 15 min) rearma sus pestañas.
+function anotarMesesSucios_() {
+  const nuevos = Object.keys(_mesesSucios);
+  if (!nuevos.length) return;
+  let lista = [];
+  try { lista = JSON.parse(propiedad_('meses_sucios') || '[]'); } catch (e) { lista = []; }
+  nuevos.forEach(function (m) { if (lista.indexOf(m) < 0) lista.push(m); });
+  setPropiedad_('meses_sucios', JSON.stringify(lista));
   _mesesSucios = {};
+}
+
+function refrescarMesesSucios_() {
+  let lista = [];
+  try { lista = JSON.parse(propiedad_('meses_sucios') || '[]'); } catch (e) { lista = []; }
+  Object.keys(_mesesSucios).forEach(function (m) { if (lista.indexOf(m) < 0) lista.push(m); });
+  lista.forEach(refrescarPestanaMes_);
+  _mesesSucios = {};
+  if (propiedad_('meses_sucios')) setPropiedad_('meses_sucios', '[]');
 }
 
 function refrescarPestanaMes_(mes) {

@@ -57,7 +57,10 @@
   .dia.hoy { outline: 2px solid var(--primario); outline-offset: -1px; }
   .dia.vac { background: var(--vacaciones); }
   .ficha { display: block; border-radius: 5px; padding: 1px 3px; font-size: 12px; font-weight: 600; text-align: center; margin-top: 2px; }
-  .c-prevista { background: var(--prevista); } .c-confirmada { background: var(--confirmada); } .c-cubierta { background: var(--cubierta); }
+  .c-prevista { background: var(--prevista); } .c-contrato { background: #fff3c4; box-shadow: inset 0 0 0 1px #d9ab12; } .c-referencia { background: #fff; box-shadow: inset 0 0 0 1px #aeb8c4; color: var(--suave); font-weight: 400; }
+  #guardando { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 20; background: #121826; color: #fff; font-size: 13px; padding: 5px 12px; border-radius: 999px; box-shadow: 0 2px 8px #0004; pointer-events: none; }
+  #guardando::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #FFD23F; margin-right: 7px; vertical-align: 1px; animation: titila 1s infinite alternate; }
+  @keyframes titila { from { opacity: 1; } to { opacity: .25; } } .c-confirmada { background: var(--confirmada); } .c-cubierta { background: var(--cubierta); }
   .c-reemplazo { background: var(--reemplazo); } .c-anticipada { background: var(--anticipada); } .c-espera { background: var(--espera); } .c-conflicto { background: var(--conflicto); } .c-vacaciones { background: var(--vacaciones); }
   .leyenda { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; font-size: 12px; }
   .leyenda span { border-radius: 5px; padding: 2px 6px; }
@@ -117,7 +120,7 @@
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   document.getElementById('demo-reiniciar').onclick = async () => {
     (await window.demoServidor()).demoReiniciar();
-    try { Object.keys(localStorage).forEach((k) => { if (/guardia/i.test(k)) localStorage.removeItem(k); }); } catch (e) {}
+    try { Object.keys(localStorage).forEach((k) => { if (/guardia|ficha/i.test(k)) localStorage.removeItem(k); }); } catch (e) {}
     try { sessionStorage.removeItem('guardias-demo-instalada'); sessionStorage.removeItem('ficha_navegador'); } catch (e) {}
     location.href = location.pathname;
   };
@@ -141,6 +144,7 @@
 <main id="app"><div class="cargando">Cargando…</div></main>
 <div id="fijo" hidden><button id="btn-cargar">+ Cargar guardia</button></div>
 <nav id="nav" hidden></nav>
+<div id="guardando" hidden role="status">Guardando…</div>
 <script>
 // DEMO: google.script.run llama al simulador que corre en un marco oculto (servidor.html).
 // Los avisos push se simulan: aparecen arriba de la pantalla como una notificación, con sus botones.
@@ -205,7 +209,7 @@ window.GUARDIAS_CONFIG = { instalable: true }; // la demo también muestra la pa
           if (!a.firma) { location.href = a.url; return; }
           const r = s.demoAccion(a.firma);
           window.demoNotificar({ titulo: 'Fichá', cuerpo: r.ok ? r.texto : r.error, url: p.url, acciones: [] }, s);
-          if (typeof window.ir === 'function') window.ir('mes');
+          if (typeof window.sincronizar === 'function') window.sincronizar();
         };
         fila.appendChild(b);
       });
@@ -273,19 +277,154 @@ function el(tag, props, ...hijos) {
   return n;
 }
 
+// Todo lo que muestran las pantallas viene en un "paquete" que se guarda en el celular: las pantallas se
+// arman desde ahí, sin esperar al servidor. Cada escritura devuelve el paquete actualizado.
+const CLAVE_PAQUETE = 'ficha_paquete';
+const CLAVE_MEDIDAS = 'ficha_medidas';
+const VISTAS_DE_PAQUETE = ['mes', 'libres', 'vacaciones', 'deudas'];
+let paquete = null;
+let ultimaSync = 0;
+function leerPaquete() {
+  try {
+    const p = JSON.parse(localStorage.getItem(CLAVE_PAQUETE) || 'null');
+    return p && p.inicio && p.inicio.yo && token && token.split('.')[0] === String(p.inicio.yo.id) ? p : null;
+  } catch (e) { return null; }
+}
+function aplicarPaquete(p) {
+  if (!p || !p.inicio) return;
+  paquete = p;
+  datos = p.inicio;
+  ultimaSync = Date.now();
+  try { localStorage.setItem(CLAVE_PAQUETE, JSON.stringify(p)); } catch (e) { /* sin memoria: igual anda */ }
+}
+function olvidarPaquete() { paquete = null; try { localStorage.removeItem(CLAVE_PAQUETE); } catch (e) {} }
+// Tiempos de cada llamada (para la pestaña Mi servicio del jefe).
+function medir(metodo, total, servidor) {
+  try {
+    const l = JSON.parse(localStorage.getItem(CLAVE_MEDIDAS) || '[]');
+    l.push({ m: metodo, t: Math.round(total), s: servidor || 0, f: Date.now() });
+    localStorage.setItem(CLAVE_MEDIDAS, JSON.stringify(l.slice(-60)));
+  } catch (e) {}
+}
 function llamar(metodo, ...args) {
+  const t0 = performance.now();
   return new Promise((ok, mal) => {
     google.script.run
       .withSuccessHandler((r) => {
+        medir(metodo, performance.now() - t0, r && r.ms);
+        if (r && r.paquete) aplicarPaquete(r.paquete);
         if (r && r.ok) return ok(r.datos);
         if (r && r.sesion) { salir(); return mal(new Error(r.error)); }
         if (r && r.registro) { arrancar(); return mal(new Error(r.error)); }
         mal(new Error((r && r.error) || 'Hubo un error.'));
       })
       .withFailureHandler(() => mal(new Error('No hay conexión. Probá de nuevo.')))
-      .api(token, metodo, args);
+      .api(token, metodo, args, { mes: mesActual });
   });
 }
+// Lee del paquete; si no está (por ej., otro mes), lo pide al servidor y lo guarda.
+async function delPaquete(clave, metodo, ...args) {
+  if (paquete && paquete[clave] !== undefined) return paquete[clave];
+  const d = await llamar(metodo, ...args);
+  if (paquete) paquete[clave] = d;
+  return d;
+}
+async function mesDelPaquete(mes) {
+  if (paquete && paquete.meses && paquete.meses[mes]) return paquete.meses[mes];
+  const d = await llamar('miMes', mes);
+  if (paquete) { paquete.meses = paquete.meses || {}; paquete.meses[mes] = d; }
+  return d;
+}
+// Trae el paquete de nuevo sin bloquear (al abrir la app y al volver a ella) y redibuja si corresponde.
+async function sincronizar() {
+  if (!token) return;
+  try { aplicarPaquete(await llamar('paquete', mesActual)); repintarFondo(); } catch (e) { /* se sigue con lo guardado */ }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && paquete && Date.now() - ultimaSync > 3000 && !enCurso) sincronizar();
+});
+function repintarFondo() {
+  if (!datos || datos.registro || modoJefe || !VISTAS_DE_PAQUETE.includes(vista)) return;
+  const y = window.scrollY;
+  ir(vista);
+  window.scrollTo(0, y);
+}
+
+// Guardar de fondo: la pantalla cambia al instante (cambio previsto) y aparece "Guardando…".
+// Las escrituras van de a una, en orden. Si falla, vuelve a como estaba y avisa.
+let colaGuardado = Promise.resolve();
+let enCurso = 0;
+function marcarGuardando() { $('guardando').hidden = enCurso === 0; }
+function enFondo(metodo, args, op) {
+  op = op || {};
+  const foto = paquete ? JSON.stringify(paquete) : null;
+  if (op.cambio && paquete) { try { op.cambio(paquete); } catch (e) { /* solo visual */ } }
+  if (op.texto) aviso = { texto: op.texto };
+  if (op.ir) ir(op.ir);
+  enCurso++;
+  marcarGuardando();
+  const p = colaGuardado.then(() => llamar(metodo, ...args));
+  colaGuardado = p.catch(() => {});
+  return p.then((d) => {
+    if (op.listo) op.listo(d);
+    repintarFondo();
+    return d;
+  }, (e) => {
+    if (foto) aplicarPaquete(JSON.parse(foto));
+    aviso = { texto: 'No se guardó: ' + e.message, error: true };
+    if (VISTAS_DE_PAQUETE.includes(vista) && !modoJefe) repintarFondo(); else ir('mes');
+  }).finally(() => { enCurso--; marcarGuardando(); });
+}
+// Cambios previstos sobre el paquete (se corrigen solos con la respuesta del servidor).
+function cadaGuardia(p, id, fn) {
+  Object.values(p.meses || {}).forEach((m) => {
+    (m.guardias || []).forEach((g) => { if (String(g.id) === String(id)) fn(g, false); });
+    (m.dias || []).forEach((d) => d.guardias.forEach((f) => { if (String(f.id) === String(id)) fn(f, true); }));
+    m.pendientes = (m.pendientes || []).filter((g) => String(g.id) !== String(id));
+  });
+}
+const previsto = {
+  confirmar: (g) => (p) => cadaGuardia(p, g.id, (x) => {
+    x.color = g.anticipable ? 'anticipada' : 'confirmada';
+    x.estado = g.anticipable ? 'CONFIRMADA_ANTICIPADA' : 'CONFIRMADA';
+    x.debe_responder = false; x.puede_hago_yo = false;
+  }),
+  respondido: (g) => (p) => cadaGuardia(p, g.id, (x) => { x.debe_responder = false; }),
+  desmarcar: (g) => (p) => cadaGuardia(p, g.id, (x) => { x.estado = 'PREVISTA'; x.color = g.tipo === 'CONTRATO' ? 'contrato' : 'prevista'; }),
+  quitar: (g) => (p) => Object.values(p.meses || {}).forEach((m) => {
+    m.guardias = (m.guardias || []).filter((x) => String(x.id) !== String(g.id));
+    (m.dias || []).forEach((d) => { d.guardias = d.guardias.filter((f) => String(f.id) !== String(g.id)); });
+  }),
+  tomar: (l) => (p) => {
+    p.libres = (p.libres || []).filter((x) => String(x.id) !== String(l.id));
+    Object.values(p.meses || {}).forEach((m) => {
+      if (m.libres) m.libres = Math.max(0, m.libres - 1);
+      (m.dias || []).forEach((d) => {
+        if (d.fecha === l.fecha) { d.guardias.push({ id: l.id, color: 'prevista', texto: (l.horas || '') + ' h' }); (d.ocupado = d.ocupado || []).push(l.turno_id); }
+      });
+    });
+  },
+  liberar: (g) => (p) => cadaGuardia(p, g.id, (x) => { x.color = 'prevista'; x.en_bolsa = true; x.puede_liberar = false; }),
+  pago: (id) => (p) => { (p.deudas && p.deudas.me_deben || []).forEach((d) => { if (String(d.id) === String(id)) d.estado = 'pagada'; }); }
+};
+// Turnos que se pisan con lo que ya hace ese día (24 h pisa todo; 12 h de día y de noche no se pisan).
+const sePisan = (a, b) => a === b || a === '24H' || b === '24H';
+function diaDelPaquete(fecha) {
+  const m = paquete && paquete.meses && paquete.meses[fecha.slice(0, 7)];
+  return m ? (m.dias || []).find((d) => d.fecha === fecha) || null : null;
+}
+function turnosLibres(fecha) {
+  const d = diaDelPaquete(fecha);
+  if (!d) return datos.turnos.map((t) => t.id);
+  if (d.vacaciones) return [];
+  return datos.turnos.map((t) => t.id).filter((t) => !(d.ocupado || []).some((o) => sePisan(o, t)));
+}
+function porQueNoHayTurno(fecha) {
+  const d = diaDelPaquete(fecha);
+  if (d && d.vacaciones) return 'Ese día estás ausente (vacaciones o licencia): no podés cargar ni tomar guardias.';
+  return (d && d.ocupado_texto) || 'Ese día ya no te queda horario libre.';
+}
+const antesDeLaApp = (fecha) => !!(datos.primer_mes && fecha.slice(0, 7) < datos.primer_mes);
 
 function pintar(...nodos) {
   const app = $('app');
@@ -303,7 +442,7 @@ function bloqueAviso() {
     a.deshacer ? el('div', { style: 'margin-top:8px' }, botonDeshacer(a.deshacer)) : null);
 }
 function botonDeshacer(id) {
-  return el('button', { class: 'chico', onclick: accion(async () => { await llamar('deshacer', id); aviso = { texto: 'Deshecho.' }; ir('mes'); }) }, 'Deshacer');
+  return el('button', { class: 'chico', onclick: () => enFondo('deshacer', [id], { texto: 'Deshaciendo…', ir: 'mes', listo: () => { aviso = { texto: 'Deshecho.' }; } }) }, 'Deshacer');
 }
 // Botón que se desactiva mientras espera: evita confirmar dos veces por tocar dos veces.
 function accion(fn) {
@@ -318,6 +457,8 @@ function categoriaLocal(f) {
   const d = new Date(f + 'T12:00:00').getDay();
   return d === 0 || d === 6 || datos.feriados.includes(f) ? 'no hábil' : 'hábil';
 }
+const MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+function nombreMesLargo(m) { return m ? MESES_LARGOS[Number(m.slice(5)) - 1] + ' ' + m.slice(0, 4) : ''; }
 function sumarMes(m, n) { const d = new Date(Date.UTC(+m.slice(0, 4), +m.slice(5) - 1 + n, 1)); return d.toISOString().slice(0, 7); }
 function navMes(titulo, cambiar) {
   return el('div', { class: 'mesnav' },
@@ -501,19 +642,27 @@ function pantallaInstalar(listo) {
   pintar(nodos);
 }
 
-function salir() { token = ''; escribir(''); datos = null; modoJefe = false; pantallaLogin(); }
+function salir() { token = ''; escribir(''); datos = null; olvidarPaquete(); modoJefe = false; pantallaLogin(); }
 
+// Si hay un paquete guardado en el celular, la app abre al instante con eso y actualiza de fondo.
 async function arrancar() {
   if (debeMostrarInstalacion()) return pantallaInstalar();
   if (!token) return pantallaLogin();
-  cargando();
-  try { datos = await llamar('inicio'); } catch (e) { if (token) mostrarError(e); return; }
-  mesActual = datos.hoy.slice(0, 7);
+  const guardado = leerPaquete();
+  if (guardado && guardado.meses) {
+    aplicarPaquete(guardado);
+    ultimaSync = 0;
+  } else {
+    cargando();
+    try { aplicarPaquete(await llamar('paquete')); } catch (e) { if (token) mostrarError(e); return; }
+  }
+  if (!mesActual) mesActual = datos.hoy.slice(0, 7);
   $('cab').hidden = false;
   $('cab-nombre').textContent = datos.yo.nombre;
   $('btn-jefe').hidden = true;
   if (datos.registro) return pantallaRegistro();
   seguirAlInicio();
+  if (!ultimaSync) sincronizar();
 }
 
 function seguirAlInicio() {
@@ -735,7 +884,7 @@ async function regResumen() {
     el('div', { class: 'tarjeta destacado', id: 'r-resumen' }, r.resumen),
     el('button', { class: 'grande', id: 'r-confirmar', onclick: regAccion(async () => {
       await llamar('registroConfirmar');
-      datos = await llamar('inicio');
+      if (!paquete || !paquete.meses) aplicarPaquete(await llamar('paquete'));
       $('btn-jefe').hidden = !datos.yo.admin;
       aviso = { texto: '¡Listo! Ya podés usar la app. Todo se puede cambiar después desde Mi perfil.' };
       seguirAlInicio();
@@ -769,7 +918,9 @@ const NOMBRE_COLOR = { prevista: 'Prevista', confirmada: 'Confirmada', cubierta:
 async function verMes() {
   cargando();
   let d;
-  try { d = await llamar('miMes', mesActual); } catch (e) { return mostrarError(e); }
+  const enMemoria = paquete && paquete.meses && paquete.meses[mesActual];
+  if (!enMemoria) cargando();
+  try { d = await mesDelPaquete(mesActual); } catch (e) { return mostrarError(e); }
   const primero = (new Date(d.dias[0].fecha + 'T12:00:00').getDay() + 6) % 7;
   const celdas = DIAS_CAB.map((c) => el('div', { class: 'cab' }, c));
   for (let i = 0; i < primero; i++) celdas.push(el('div'));
@@ -784,7 +935,7 @@ async function verMes() {
       onclick: () => (dia.guardias.length ? irConfirmar(dia.guardias[0].id) : verCargar(dia.fecha))
     }, el('span', { class: 'num' }, Number(dia.fecha.slice(8))), fichas));
   });
-  const leyenda = [['prevista', 'Prevista'], ['confirmada', 'Confirmada'], ['anticipada', 'Por adelantado'], ['cubierta', 'Cubierta'], ['reemplazo', 'Reemplazo'], ['vacaciones', 'Ausente'], ['espera', 'Esperando'], ['conflicto', 'Conflicto']];
+  const leyenda = [['contrato', 'Contrato'], ['prevista', 'Prevista'], ['confirmada', 'Confirmada'], ['anticipada', 'Por adelantado'], ['cubierta', 'Cubierta'], ['reemplazo', 'Reemplazo'], ['vacaciones', 'Ausente'], ['espera', 'Esperando'], ['conflicto', 'Conflicto']];
   pintar(
     bloqueAviso(),
     esSolo() ? el('button', { class: 'grande verde', id: 'btn-cargar-reemplazo', onclick: () => verCargar(datos.hoy) }, '+ Cargar reemplazo') : null,
@@ -794,7 +945,8 @@ async function verMes() {
     el('div', { class: 'tarjeta' }, el('div', { class: 'destacado' }, 'Reemplazos confirmados este mes: ' + d.reemplazos + (d.reemplazos ? ', se cobran el ' + d.cobro : '')),
       d.reemplazos ? null : el('div', { class: 'suave' }, 'Lo de este mes se cobra el ' + d.cobro + '.')),
     el('div', { class: 'regla' }, datos.regla),
-    d.cerrado ? el('div', { class: 'regla' }, 'Este mes ya cerró. Lo que falte se carga como "reclamo mes anterior".') : null,
+    antesDeLaApp(d.mes + '-01') ? el('div', { class: 'regla', id: 'mes-referencia' }, 'Este mes se maneja a mano: tus guardias de contrato se ven solo como referencia. En la app empiezan en ' + nombreMesLargo(datos.primer_mes) + '.')
+      : d.cerrado ? el('div', { class: 'regla' }, 'Este mes ya cerró. Lo que falte se carga como "reclamo mes anterior".') : null,
     d.ventana ? el('div', { class: 'regla' }, d.ventana) : null,
     d.pendientes.length ? el('div', { class: 'tarjeta' },
       el('h3', { style: 'margin-top:0' }, 'Para confirmar (' + d.pendientes.length + ')'),
@@ -827,8 +979,8 @@ function botonesMenu(g) {
   if (g.deshacer_min) b.push(botonDeshacer(g.id), el('span', { class: 'suave', style: 'margin-right:6px' }, 'quedan ' + g.deshacer_min + ' min'));
   if (g.debe_responder || g.puede_hago_yo || g.puede_cubrir || g.control_pendiente) b.push(el('button', { class: 'chico', onclick: () => irConfirmar(g.id) }, 'Abrir'));
   if (g.acciones.includes('editar')) b.push(el('button', { class: 'chico', onclick: () => pintarEditar(g) }, 'Editar'));
-  if (g.acciones.includes('desmarcar')) b.push(el('button', { class: 'chico', onclick: accion(async () => { await llamar('desmarcarGuardia', g.id); aviso = { texto: 'Guardia desmarcada.' }; ir('mes'); }) }, 'Desmarcar'));
-  if (g.acciones.includes('anular')) b.push(el('button', { class: 'chico', onclick: accion(async () => { await llamar('anularGuardia', g.id); aviso = { texto: 'Guardia anulada.' }; ir('mes'); }) }, 'Anular'));
+  if (g.acciones.includes('desmarcar')) b.push(el('button', { class: 'chico', onclick: () => enFondo('desmarcarGuardia', [g.id], { cambio: previsto.desmarcar(g), texto: 'Guardia desmarcada.', ir: 'mes' }) }, 'Desmarcar'));
+  if (g.acciones.includes('anular')) b.push(el('button', { class: 'chico', onclick: () => enFondo('anularGuardia', [g.id], { cambio: previsto.quitar(g), texto: 'Guardia anulada.', ir: 'mes' }) }, 'Anular'));
   return b;
 }
 
@@ -836,9 +988,12 @@ function botonesMenu(g) {
 async function irConfirmar(id) {
   vista = 'guardia';
   pintarNav();
-  cargando();
-  let g;
-  try { g = await llamar('guardia', id); } catch (e) { aviso = { texto: e.message, error: true }; return ir('mes'); }
+  let g = null;
+  Object.values((paquete && paquete.meses) || {}).forEach((m) => (m.guardias || []).forEach((x) => { if (String(x.id) === String(id)) g = x; }));
+  if (!g) {
+    cargando();
+    try { g = await llamar('guardia', id); } catch (e) { aviso = { texto: e.message, error: true }; return ir('mes'); }
+  }
   pintarConfirmar(g);
 }
 function resumenGuardia(g) {
@@ -850,10 +1005,17 @@ function resumenGuardia(g) {
     g.reclamo ? el('div', null, el('span', { class: 'marca' }, 'reclamo mes anterior: se cobra con ' + g.mes_facturacion)) : null);
 }
 function pintarConfirmar(g) {
-  const hecho = (t, r) => { aviso = { texto: t, deshacer: r && r.deshacer_min ? r.id : null }; ir('mes'); };
+  // Al tocar, Mi mes cambia al instante y se guarda de fondo; el "Deshacer" aparece cuando el servidor confirma.
+  const deFondo = (metodo, args, texto, cambio) => () => enFondo(metodo, args, { cambio: cambio, texto: texto, ir: 'mes',
+    listo: (r) => { if (r && r.deshacer_min) { aviso = { texto: texto, deshacer: r.id }; } } });
   const nodos = [bloqueAviso(), resumenGuardia(g)];
+  if (g.referencia) {
+    nodos.push(el('div', { class: 'regla' }, 'Guardia de referencia: ' + nombreMesLargo(g.fecha.slice(0, 7)) + ' se maneja a mano, acá no se ficha.'));
+    nodos.push(el('button', { class: 'grande sec', onclick: () => ir('mes') }, 'Volver'));
+    return pintar(nodos);
+  }
   if (g.control_pendiente) {
-    const responder = (r, t) => accion(async () => { hecho(t, await llamar('responderControl', g.id, r)); });
+    const responder = (r, t) => deFondo('responderControl', [g.id, r], t, previsto.respondido(g));
     nodos.push(el('h3', null, '¿Hiciste la guardia de hoy?'));
     nodos.push(el('button', { class: 'grande', onclick: responder('SI', 'Anotado.') }, 'Sí'));
     nodos.push(el('button', { class: 'grande sec', onclick: () => pintarControlCubierta(g) }, 'No, me cubrió alguien'));
@@ -865,28 +1027,29 @@ function pintarConfirmar(g) {
   if (g.debe_responder) {
     const texto = g.estado === 'EN_CONFLICTO' ? '¿Se hizo esta cobertura?' : g.es_hizo ? '¿Confirmás que hacés esta guardia?' : '¿Te cubren esta guardia?';
     nodos.push(el('h3', null, texto));
-    nodos.push(el('button', { class: 'grande', onclick: accion(async () => { hecho('Anotado.', await llamar('responder', g.id, true)); }) }, 'Sí'));
-    nodos.push(el('button', { class: 'grande peligro', onclick: accion(async () => { hecho('Anotado.', await llamar('responder', g.id, false)); }) }, 'No'));
+    nodos.push(el('button', { class: 'grande', onclick: deFondo('responder', [g.id, true], 'Anotado.', previsto.respondido(g)) }, 'Sí'));
+    nodos.push(el('button', { class: 'grande peligro', onclick: deFondo('responder', [g.id, false], 'Anotado.', previsto.respondido(g)) }, 'No'));
   }
   // Si le están preguntando algo, solo Sí o No. En un conflicto sí puede cambiar quién la hizo.
   const soloResponder = g.debe_responder && g.estado !== 'EN_CONFLICTO';
-  if (g.puede_hago_yo && !soloResponder) nodos.push(el('button', { class: 'grande', onclick: accion(async () => { hecho(g.anticipable ? 'Confirmada por adelantado.' : 'Guardia confirmada.', await llamar('hagoYo', g.id)); }) }, g.anticipable ? 'La hago yo (confirmar por adelantado)' : 'La hago yo'));
+  if (g.puede_hago_yo && !soloResponder) nodos.push(el('button', { class: 'grande', onclick: deFondo('hagoYo', [g.id], g.anticipable ? 'Confirmada por adelantado.' : 'Guardia confirmada.', previsto.confirmar(g)) }, g.anticipable ? 'La hago yo (confirmar por adelantado)' : 'La hago yo'));
   if (g.puede_cubrir && !soloResponder) nodos.push(el('button', { class: 'grande sec', onclick: () => pintarMeCubre(g) }, 'Me cubre…'));
   if (g.puede_liberar && !soloResponder) nodos.push(el('button', { class: 'grande sec', id: 'btn-liberar', onclick: () => pintarLiberar(g) }, 'Liberar (la pongo en la bolsa)'));
   if (g.en_bolsa && g.es_titular) nodos.push(el('div', { class: 'regla' }, 'Esta guardia está en la bolsa de guardias libres: el primero que la tome la hace.'));
-  if (g.puede_recuperar) nodos.push(el('button', { class: 'grande sec', id: 'btn-recuperar', onclick: accion(async () => { await llamar('tomarLibre', g.id); hecho('Listo: la guardia volvió a ser tuya.'); }) }, 'La hago yo (sacarla de la bolsa)'));
+  if (g.puede_recuperar) nodos.push(el('button', { class: 'grande sec', id: 'btn-recuperar', onclick: deFondo('tomarLibre', [g.id], 'Listo: la guardia volvió a ser tuya.', previsto.desmarcar(g)) }, 'La hago yo (sacarla de la bolsa)'));
   nodos.push(el('div', { style: 'margin:10px 0' }, botonesMenu(Object.assign({}, g, { debe_responder: false, puede_hago_yo: false, puede_cubrir: false }))));
+  // Si ese día le queda horario (por ej., contrato de 12 h de día), se ofrece cargar un reemplazo en el otro turno.
+  if (!g.cerrado && !antesDeLaApp(g.fecha) && turnosLibres(g.fecha).length) {
+    nodos.push(el('button', { class: 'grande sec', id: 'btn-cargar-ese-dia', onclick: () => verCargar(g.fecha) }, 'Cargar un reemplazo ese día'));
+  }
   if (!g.acciones.length && g.cerrado) nodos.push(el('div', { class: 'regla' }, 'Este mes ya cerró y no se puede editar. Lo que falte, cargalo como "reclamo mes anterior" con + Cargar guardia.'));
   nodos.push(el('button', { class: 'grande sec', onclick: () => ir('mes') }, 'Volver'));
   pintar(nodos);
 }
 // Cambio personal: la guardia sale a la bolsa y el titular elige quién le paga a quien la tome.
 function pintarLiberar(g) {
-  const liberar = (tipo) => accion(async () => {
-    await llamar('liberarGuardia', g.id, tipo);
-    aviso = { texto: 'Listo: tu guardia del ' + fechaLinda(g.fecha) + ' está en la bolsa. Te avisamos cuando alguien la tome.' };
-    ir('mes');
-  });
+  const liberar = (tipo) => () => enFondo('liberarGuardia', [g.id, tipo], { cambio: previsto.liberar(g), ir: 'mes',
+    texto: 'Listo: tu guardia del ' + fechaLinda(g.fecha) + ' está en la bolsa. Te avisamos cuando alguien la tome.' });
   pintar(bloqueAviso(), resumenGuardia(g), el('h3', null, '¿Quién le paga a quien la tome?'),
     el('button', { class: 'grande', id: 'liberar-hospital', onclick: liberar('REEMPLAZO_HOSPITAL') }, 'El hospital'),
     el('button', { class: 'grande sec', id: 'liberar-yo', onclick: liberar('COBERTURA_COMPANERO') }, 'Yo (le pago a quien la tome)'),
@@ -896,23 +1059,35 @@ function pintarLiberar(g) {
 
 // --- Guardias libres: las ve todo el servicio. Nunca dicen quién se ausenta. ---
 async function verLibres() {
-  cargando();
   let lista;
-  try { lista = await llamar('libres'); } catch (e) { return mostrarError(e); }
-  const tomar = (l) => accion(async () => {
-    await llamar('tomarLibre', l.id);
-    aviso = { texto: l.mia ? 'Listo: la guardia volvió a ser tuya.' : 'Es tuya: ' + l.dia + ' ' + fechaLinda(l.fecha) + ', ' + l.turno + '. Ese día la fichás como cualquier reemplazo.' };
-    ir('mes');
-  });
+  if (!paquete || !paquete.libres) cargando();
+  try { lista = await delPaquete('libres', 'libres'); } catch (e) { return mostrarError(e); }
+  const tomar = (l) => () => enFondo('tomarLibre', [l.id], { cambio: previsto.tomar(l), ir: 'mes',
+    texto: l.mia ? 'Listo: la guardia volvió a ser tuya.' : 'Es tuya: ' + l.dia + ' ' + fechaLinda(l.fecha) + ', ' + l.turno + '. Ese día la fichás como cualquier reemplazo.' });
   pintar(bloqueAviso(), el('h2', null, 'Guardias libres (' + lista.length + ')'),
     el('p', { class: 'suave' }, 'El primero que toca "La tomo" se la queda. Queda en tu mes y ese día la fichás como cualquier reemplazo.'),
     lista.length ? lista.map((l) => el('div', { class: 'tarjeta', 'data-libre': l.id },
       el('div', { class: 'destacado' }, l.dia.charAt(0).toUpperCase() + l.dia.slice(1) + ' ' + fechaLinda(l.fecha)),
       el('div', null, l.turno + ' · ' + l.categoria),
       el('div', { class: 'suave' }, l.paga + (l.mia ? ' · es tuya, la liberaste vos' : '')),
-      l.puede_tomar ? el('button', { class: 'grande', style: 'margin:10px 0 0', onclick: tomar(l) }, l.mia ? 'La hago yo' : 'La tomo') : null))
+      l.puede_tomar ? el('button', { class: 'grande', style: 'margin:10px 0 0', onclick: tomar(l) }, l.mia ? 'La hago yo' : 'La tomo')
+        : l.no_puede ? el('div', { class: 'regla', style: 'margin:10px 0 0' }, l.no_puede) : null))
       : el('div', { class: 'tarjeta suave' }, 'No hay guardias libres.'),
     el('button', { class: 'grande sec', onclick: () => ir('mes') }, 'Volver'));
+}
+
+function tablaVelocidad() {
+  let l = [];
+  try { l = JSON.parse(localStorage.getItem(CLAVE_MEDIDAS) || '[]'); } catch (e) {}
+  if (!l.length) return el('div', { class: 'suave' }, 'Todavía no hay mediciones.');
+  const por = {};
+  l.forEach((x) => { (por[x.m] = por[x.m] || []).push(x); });
+  return [el('div', { class: 'suave', style: 'margin-bottom:6px' }, 'Las pantallas se arman desde la memoria del celular. Esto es lo que tarda guardar o actualizar con Google, de fondo (promedio; entre paréntesis, la parte del servidor).')]
+    .concat(Object.keys(por).sort().map((k) => {
+      const xs = por[k];
+      const prom = (f) => Math.round(xs.reduce((a, x) => a + x[f], 0) / xs.length);
+      return el('div', { class: 'fila' }, el('span', null, k), el('span', null, (prom('t') / 1000).toFixed(1) + ' s (' + (prom('s') / 1000).toFixed(1) + ' s) · ' + xs.length + '×'));
+    }));
 }
 
 // --- Jefe: Mi servicio. Solo para mirar: nunca pide aprobaciones. ---
@@ -934,6 +1109,8 @@ async function verServicio() {
     el('div', { class: 'tarjeta', id: 's-cambios' }, d.cambios.length ? d.cambios.map((c) => el('div', { class: 'fila' },
       el('span', null, el('b', null, c.quien), el('br'), el('span', { class: 'suave' }, c.que + (c.guardia ? ' · ' + c.guardia : ''))),
       el('span', { class: 'suave' }, fechaLinda(c.cuando.slice(0, 10)).replace(/\/\d{4}$/, '') + ' ' + c.cuando.slice(11)))) : vacio('Sin cambios en la última semana.')),
+    el('h3', null, 'Velocidad (medida en este celular)'),
+    el('div', { class: 'tarjeta', id: 's-velocidad' }, tablaVelocidad()),
     el('h3', null, 'Herramientas'),
     el('div', { class: 'tarjeta' }, el('div', null, 'Código del servicio para registrarse: ', el('b', { id: 's-codigo' }, d.codigo || '(registro cerrado)')),
       el('div', { class: 'suave' }, 'Se cambia en Ajustes.'),
@@ -955,9 +1132,9 @@ function pintarControlCubierta(g) {
     el('div', { class: 'tarjeta' }, el('label', { htmlFor: 'cc-quien' }, '¿Quién te cubrió?'), quien, el('label', null, '¿Quién paga?'), paga.nodo, el('br'),
       el('button', { class: 'grande', onclick: accion(async () => {
         if (!quien.value) throw new Error('Elegí quién te cubrió.');
-        const r = await llamar('responderControl', g.id, 'CUBIERTA', { cubridor: quien.value, tipo: paga.valor() });
-        aviso = { texto: 'Le pedimos a ' + quien.selectedOptions[0].textContent + ' que confirme.', deshacer: r.id };
-        ir('mes');
+        const texto = 'Le pedimos a ' + quien.selectedOptions[0].textContent + ' que confirme.';
+        enFondo('responderControl', [g.id, 'CUBIERTA', { cubridor: quien.value, tipo: paga.valor() }], { cambio: previsto.respondido(g), texto: texto, ir: 'mes',
+          listo: (r) => { aviso = { texto: texto, deshacer: r && r.id }; } });
       }) }, 'Guardar')),
     el('button', { class: 'grande sec', onclick: () => pintarConfirmar(g) }, 'Volver'));
 }
@@ -989,9 +1166,9 @@ function pintarMeCubre(g) {
     el('label', null, '¿Quién paga?'), paga.nodo, el('br'),
     el('button', { class: 'grande', onclick: accion(async () => {
       if (!quien.value) throw new Error('Elegí quién te cubre.');
-      const r = await llamar('meCubre', g.id, paga.valor(), quien.value === 'nose' ? '' : quien.value);
-      aviso = { texto: quien.value === 'nose' ? 'Queda pendiente hasta que alguien cargue la guardia.' : 'Le pedimos a ' + quien.selectedOptions[0].textContent + ' que confirme.', deshacer: r.id };
-      ir('mes');
+      const texto = quien.value === 'nose' ? 'Queda pendiente hasta que alguien cargue la guardia.' : 'Le pedimos a ' + quien.selectedOptions[0].textContent + ' que confirme.';
+      enFondo('meCubre', [g.id, paga.valor(), quien.value === 'nose' ? '' : quien.value], { cambio: previsto.respondido(g), texto: texto, ir: 'mes',
+        listo: (r) => { aviso = { texto: texto, deshacer: r && r.id }; } });
     }) }, 'Guardar')),
     el('button', { class: 'grande sec', onclick: () => irConfirmar(g.id) }, 'Volver'));
 }
@@ -1007,9 +1184,7 @@ function pintarEditar(g) {
     el('div', { class: 'tarjeta' }, el('label', { htmlFor: 'e-fecha' }, 'Fecha'), fecha, el('label', { htmlFor: 'e-turno' }, 'Turno'), turno,
       el('label', { htmlFor: 'e-tipo' }, '¿Quién paga?'), tipo, el('br'),
       el('button', { class: 'grande', onclick: accion(async () => {
-        await llamar('editarGuardia', g.id, { fecha: fecha.value, turno: turno.value, tipo: tipo.value });
-        aviso = { texto: 'Guardia modificada.' };
-        ir('mes');
+        enFondo('editarGuardia', [g.id, { fecha: fecha.value, turno: turno.value, tipo: tipo.value }], { texto: 'Guardia modificada.', ir: 'mes' });
       }) }, 'Guardar cambios')),
     el('button', { class: 'grande sec', onclick: () => ir('mes') }, 'Volver'));
 }
@@ -1018,7 +1193,13 @@ function pintarEditar(g) {
 async function verCargar(fechaInicial, comoReclamo) {
   vista = 'cargar';
   pintarNav();
-  cargando();
+  // Día sin horario libre, ausente o antes de que empiece la app: se dice por qué y no se ofrece cargar.
+  const motivoNo = (f) => antesDeLaApp(f) ? 'Las guardias de ' + nombreMesLargo(f.slice(0, 7)) + ' se manejan a mano: en la app empiezan en ' + nombreMesLargo(datos.primer_mes) + '.'
+    : !turnosLibres(f).length ? porQueNoHayTurno(f) : '';
+  if (motivoNo(fechaInicial)) {
+    return pintar(el('h2', null, 'Cargar guardia del ' + fechaLinda(fechaInicial)), el('div', { class: 'regla', id: 'c-no' }, motivoNo(fechaInicial)),
+      el('button', { class: 'grande sec', onclick: () => ir('mes') }, 'Volver'));
+  }
   const fecha = el('input', { id: 'c-fecha', type: 'date', value: fechaInicial });
   const titular = el('select', { id: 'c-titular' });
   const estadoCarga = el('div', { class: 'tarjeta destacado', id: 'c-cat' });
@@ -1026,13 +1207,17 @@ async function verCargar(fechaInicial, comoReclamo) {
   const tarjetaZona = el('div', { class: 'tarjeta' }, zona);
   const avisoCerrado = el('div');
   const errorCarga = el('div', { class: 'error', role: 'alert', hidden: true });
-  let turnoElegido = '24H';
+  let turnoElegido = turnosLibres(fechaInicial)[0] || '24H';
   const botonesTurno = datos.turnos.map((t) => {
     const b = el('button', { type: 'button', 'data-turno': t.id }, { '24H': '24 h', '12H_DIA': '12 h día', '12H_NOCHE': '12 h noche' }[t.id] || t.nombre);
     b.addEventListener('click', () => { turnoElegido = t.id; marcarTurno(); refrescar(); });
     return b;
   });
-  const marcarTurno = () => botonesTurno.forEach((b) => b.setAttribute('aria-pressed', b.dataset.turno === turnoElegido));
+  const marcarTurno = () => {
+    const libres = fecha.value ? turnosLibres(fecha.value) : datos.turnos.map((t) => t.id);
+    if (!libres.includes(turnoElegido) && libres.length) turnoElegido = libres[0];
+    botonesTurno.forEach((b) => { b.setAttribute('aria-pressed', b.dataset.turno === turnoElegido); b.disabled = !libres.includes(b.dataset.turno); });
+  };
   marcarTurno();
   const paga = selectorPaga('REEMPLAZO_HOSPITAL');
   let reclamo = !!comoReclamo;
@@ -1043,8 +1228,14 @@ async function verCargar(fechaInicial, comoReclamo) {
     paga.poner(c ? c.sugerido : 'REEMPLAZO_HOSPITAL');
   };
   titular.addEventListener('change', alElegir);
+  // La lista de compañeros sale de la memoria; quién tiene guardia ese día se completa cuando responde el servidor.
+  titular.replaceChildren(el('optgroup', { label: 'Médicos' }, datos.companeros.map((x) => el('option', { value: x.id }, x.nombre))), el('option', { value: '' }, 'Puesto vacante / nadie'));
+  titular.value = '';
   async function refrescar() {
     if (!fecha.value) return;
+    const no = motivoNo(fecha.value);
+    errorCarga.textContent = no; errorCarga.hidden = !no;
+    marcarTurno();
     let r;
     try { r = await llamar('candidatos', fecha.value, turnoElegido); } catch (e) { estadoCarga.textContent = e.message; return; }
     lista = r.candidatos;
@@ -1066,39 +1257,37 @@ async function verCargar(fechaInicial, comoReclamo) {
       : [el('div', { class: 'error' }, r.mensaje_cerrado), el('button', { class: 'grande', onclick: () => { reclamo = true; refrescar(); } }, 'Cargar como reclamo')]) : []));
   }
   fecha.addEventListener('change', refrescar);
+  fecha.addEventListener('input', refrescar);
   zona.append(
     el('label', null, 'Turno'), el('div', { class: 'opciones' }, botonesTurno),
     el('label', { htmlFor: 'c-titular' }, '¿A quién cubriste?'), titular,
     el('label', null, '¿Quién paga?'), paga.nodo, el('br'),
     errorCarga,
-    el('button', { class: 'grande', id: 'c-guardar', onclick: async (ev) => {
-      const b = ev.currentTarget;
-      b.disabled = true;
-      errorCarga.hidden = true;
-      try {
-        const g = await llamar('cargarGuardia', { fecha: fecha.value, turno: turnoElegido, titular_id: titular.value, tipo: paga.valor(), reclamo: reclamo });
-        const texto = g.estado === 'CONFIRMADA' ? 'Guardia confirmada.' : g.estado === 'CONFIRMADA_ANTICIPADA' ? 'Confirmada por adelantado.'
-          : g.estado === 'PREVISTA' ? 'Quedó prevista. Te avisamos ese día.' + (g.titular ? ' Le pedimos a ' + g.titular + ' que confirme.' : '')
-            : 'Cargada. Falta que confirme ' + g.titular + '.';
-        aviso = { texto: texto, deshacer: g.deshacer_min ? g.id : null };
-        ir('mes');
-      } catch (e) {
-        errorCarga.textContent = e.message;
-        errorCarga.hidden = false;
-        b.disabled = false;
-      }
+    el('button', { class: 'grande', id: 'c-guardar', onclick: () => {
+      const no = motivoNo(fecha.value);
+      if (no) { errorCarga.textContent = no; errorCarga.hidden = false; return; }
+      if (!turnosLibres(fecha.value).includes(turnoElegido)) { errorCarga.textContent = porQueNoHayTurno(fecha.value); errorCarga.hidden = false; return; }
+      enFondo('cargarGuardia', [{ fecha: fecha.value, turno: turnoElegido, titular_id: titular.value, tipo: paga.valor(), reclamo: reclamo }], {
+        texto: 'Guardando la guardia del ' + fechaLinda(fecha.value) + '…', ir: 'mes',
+        listo: (g) => {
+          const texto = g.estado === 'CONFIRMADA' ? 'Guardia confirmada.' : g.estado === 'CONFIRMADA_ANTICIPADA' ? 'Confirmada por adelantado.'
+            : g.estado === 'PREVISTA' ? 'Quedó prevista. Te avisamos ese día.' + (g.titular ? ' Le pedimos a ' + g.titular + ' que confirme.' : '')
+              : 'Cargada. Falta que confirme ' + g.titular + '.';
+          aviso = { texto: texto, deshacer: g.deshacer_min ? g.id : null };
+        }
+      });
     } }, 'Guardar'));
   pintar(bloqueAviso(), el('h2', null, (esSolo() ? 'Cargar reemplazo del ' : 'Cargar guardia del ') + fechaLinda(fechaInicial)),
     el('label', { htmlFor: 'c-fecha' }, 'Fecha'), fecha, el('br'), el('br'), estadoCarga, avisoCerrado, tarjetaZona,
     el('button', { class: 'grande sec', onclick: () => ir('mes') }, 'Volver'));
-  await refrescar();
+  refrescar();
 }
 
 // --- Médico: Vacaciones ---
 async function verVacaciones() {
-  cargando();
   let lista;
-  try { lista = await llamar('vacaciones'); } catch (e) { return mostrarError(e); }
+  if (!paquete || !paquete.vacaciones) cargando();
+  try { lista = await delPaquete('vacaciones', 'vacaciones'); } catch (e) { return mostrarError(e); }
   const desde = el('input', { id: 'v-desde', type: 'date' });
   const hasta = el('input', { id: 'v-hasta', type: 'date' });
   const tipo = { value: 'vacaciones' };
@@ -1107,15 +1296,15 @@ async function verVacaciones() {
   cajaTipo.append(tipos());
   let editando = null;
   const boton = el('button', { class: 'grande', type: 'submit' }, 'Guardar');
-  const form = el('form', { class: 'tarjeta', onsubmit: async (ev) => {
+  const form = el('form', { class: 'tarjeta', onsubmit: (ev) => {
     ev.preventDefault();
-    boton.disabled = true;
+    if (!desde.value || !hasta.value) { aviso = { texto: 'Elegí las dos fechas.', error: true }; return verVacaciones(); }
+    if (desde.value > hasta.value) { aviso = { texto: 'La fecha "desde" tiene que ser anterior a "hasta".', error: true }; return verVacaciones(); }
     const datosV = { desde: desde.value, hasta: hasta.value, tipo: tipo.value };
-    try {
-      if (editando) await llamar('editarVacaciones', editando, datosV); else await llamar('agregarVacaciones', datosV);
-      aviso = { texto: 'Guardado. Tus guardias de esas fechas quedaron en la bolsa de guardias libres (paga el hospital).' };
-    } catch (e) { aviso = { texto: e.message, error: true }; }
-    verVacaciones();
+    const nueva = { id: 'nueva', desde: desde.value, hasta: hasta.value, tipo: tipo.value, cerrado: false };
+    enFondo(editando ? 'editarVacaciones' : 'agregarVacaciones', editando ? [editando, datosV] : [datosV], {
+      cambio: (p) => { p.vacaciones = editando ? (p.vacaciones || []).map((v) => (v.id === editando ? Object.assign({}, v, nueva, { id: v.id }) : v)) : [nueva].concat(p.vacaciones || []); },
+      texto: 'Guardado. Tus guardias de esas fechas quedaron en la bolsa de guardias libres (paga el hospital).', ir: 'vacaciones' });
   } }, el('label', { style: 'margin-top:0' }, 'Tipo'), cajaTipo, el('label', { htmlFor: 'v-desde' }, 'Desde'), desde, el('label', { htmlFor: 'v-hasta' }, 'Hasta'), hasta, el('br'), boton);
   pintar(bloqueAviso(), el('h2', null, 'Me ausento'),
     el('p', { class: 'suave' }, 'Tus guardias de esas fechas pasan a la bolsa de guardias libres y les llega un aviso a tus compañeros. Ellos no ven quién se ausenta ni por qué.'), form,
@@ -1124,14 +1313,15 @@ async function verVacaciones() {
       el('span', null, fechaLinda(v.desde) + ' a ' + fechaLinda(v.hasta) + ' (' + v.tipo + ')'),
       v.cerrado ? el('span', { class: 'suave' }, 'Mes cerrado') : el('span', null,
         el('button', { class: 'chico', onclick: () => { editando = v.id; desde.value = v.desde; hasta.value = v.hasta; tipo.value = v.tipo; cajaTipo.replaceChildren(tipos()); boton.textContent = 'Guardar cambios'; window.scrollTo(0, 0); } }, 'Cambiar'),
-        el('button', { class: 'chico', onclick: accion(async () => { await llamar('cancelarVacaciones', v.id); aviso = { texto: 'Ausencia cancelada. Tus guardias volvieron a ser tuyas.' }; verVacaciones(); }) }, 'Cancelar')))) : el('span', { class: 'suave' }, 'No cargaste ausencias.')));
+        el('button', { class: 'chico', onclick: () => enFondo('cancelarVacaciones', [v.id], { cambio: (p) => { p.vacaciones = (p.vacaciones || []).filter((x) => x.id !== v.id); },
+          texto: 'Ausencia cancelada. Tus guardias volvieron a ser tuyas.', ir: 'vacaciones' }) }, 'Cancelar')))) : el('span', { class: 'suave' }, 'No cargaste ausencias.')));
 }
 
 // --- Médico: Deudas ---
 async function verDeudas() {
-  cargando();
   let d;
-  try { d = await llamar('deudas'); } catch (e) { return mostrarError(e); }
+  if (!paquete || !paquete.deudas) cargando();
+  try { d = await delPaquete('deudas', 'deudas'); } catch (e) { return mostrarError(e); }
   const pend = (x) => x.estado === 'pendiente';
   pintar(bloqueAviso(), el('h2', null, 'Deudas entre compañeros'),
     el('h3', null, 'Lo que debo'),
@@ -1139,9 +1329,9 @@ async function verDeudas() {
     el('h3', null, 'Lo que me deben'),
     el('div', { class: 'tarjeta' }, d.me_deben.filter(pend).length ? d.me_deben.filter(pend).map((x) => el('div', null,
       el('p', { style: 'margin:0 0 8px' }, x.deudor + ': guardia del ' + fechaLinda(x.fecha) + ' (' + x.turno + '). Cobra el ' + fechaLinda(x.pago) + '.'),
-      el('button', { class: 'grande', onclick: accion(async () => { await llamar('recibiPago', x.id); aviso = { texto: 'Pago anotado.' }; verDeudas(); }) }, 'Recibí el pago'))) : el('span', { class: 'suave' }, 'No te deben nada.')),
+      el('button', { class: 'grande', onclick: () => enFondo('recibiPago', [x.id], { cambio: previsto.pago(x.id), texto: 'Pago anotado.', ir: 'deudas' }) }, 'Recibí el pago'))) : el('span', { class: 'suave' }, 'No te deben nada.')),
     d.me_deben.filter((x) => x.puede_deshacer).map((x) => el('div', { class: 'ok' }, 'Pago de ' + x.deudor + ' anotado. ',
-      el('button', { class: 'chico', onclick: accion(async () => { await llamar('deshacerPago', x.id); aviso = { texto: 'Deshecho.' }; verDeudas(); }) }, 'Deshacer'))));
+      el('button', { class: 'chico', onclick: () => enFondo('deshacerPago', [x.id], { texto: 'Deshecho.', ir: 'deudas' }) }, 'Deshacer'))));
 }
 
 // --- Médico: Guardia fija ---
@@ -1168,7 +1358,7 @@ function editorFija(filas, dias, turnos, soloReemplazo) {
 async function verContrato() {
   cargando();
   let c;
-  try { c = await llamar('contrato'); } catch (e) { return mostrarError(e); }
+  try { c = await delPaquete('contrato', 'contrato'); } catch (e) { return mostrarError(e); }
   const filas = c.filas.map((f) => Object.assign({}, f));
   const solo = c.vinculo === 'SOLO_REEMPLAZO';
   datos.yo.vinculo = c.vinculo;

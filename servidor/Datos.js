@@ -56,9 +56,29 @@ function textoCelda_(v) {
   return String(v).trim();
 }
 
+// Lo que cambia poco se guarda 5 minutos en CacheService. Cualquier escritura de la app lo invalida;
+// un cambio hecho a mano en la hoja se ve a los 5 minutos como mucho.
+const TABLAS_EN_CACHE = { CONFIG: true, FERIADOS: true };
+const SEGUNDOS_CACHE = 300;
+function olvidarCache_(nombre) {
+  if (!TABLAS_EN_CACHE[nombre]) return;
+  try { CacheService.getScriptCache().remove('tabla_' + nombre); } catch (e) { /* sin caché */ }
+}
+
 // Devuelve las filas como objetos. _f es el número de fila en la hoja.
 function filas_(nombre) {
   if (_cacheTablas[nombre]) return _cacheTablas[nombre];
+  if (TABLAS_EN_CACHE[nombre]) {
+    try {
+      const guardada = CacheService.getScriptCache().get('tabla_' + nombre);
+      if (guardada) {
+        const lista = JSON.parse(guardada);
+        lista.forEach(fijarOriginal_);
+        _cacheTablas[nombre] = lista;
+        return lista;
+      }
+    } catch (e) { /* se lee de la hoja */ }
+  }
   const valores = hoja_(nombre).getDataRange().getValues();
   const cab = (valores[0] || []).map(textoCelda_);
   const salida = [];
@@ -75,6 +95,11 @@ function filas_(nombre) {
     }
   }
   _cacheTablas[nombre] = salida;
+  if (TABLAS_EN_CACHE[nombre]) {
+    try {
+      CacheService.getScriptCache().put('tabla_' + nombre, JSON.stringify(salida, function (k, v) { return k === '_orig' ? undefined : v; }), SEGUNDOS_CACHE);
+    } catch (e) { /* sin caché */ }
+  }
   return salida;
 }
 
@@ -120,6 +145,7 @@ function textoFila_(v) {
 }
 
 function escribirFilaNueva_(nombre, obj) {
+  olvidarCache_(nombre);
   const hoja = hoja_(nombre);
   const fila = aFilaHoja_(nombre, obj);
   const n = hoja.getLastRow() + 1;
@@ -180,6 +206,7 @@ function guardar_(nombre, obj) {
     }
   });
   if (!Object.keys(despues).length) return obj;
+  olvidarCache_(nombre);
   const fila = aFilaHoja_(nombre, obj);
   hoja_(nombre).getRange(obj._f, 1, 1, fila.length).setNumberFormat('@').setValues([fila]);
   fijarOriginal_(obj);
@@ -224,7 +251,8 @@ function conLock_(fn) {
   try {
     const r = fn();
     SpreadsheetApp.flush();
-    try { refrescarMesesSucios_(); } catch (e) { console.error(e); }
+    // La pestaña del mes en la planilla (solo para mirar) se rearma de fondo, en el automatismo.
+    try { anotarMesesSucios_(); } catch (e) { console.error(e); }
     return r;
   } finally {
     lock.releaseLock();

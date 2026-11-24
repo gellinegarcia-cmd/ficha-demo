@@ -88,6 +88,7 @@ function login(id, pin) {
 function tablaApi_() {
   return {
     inicio: { registro: 1, f: apiInicio_ },
+    paquete: { registro: 1, f: function (m, a) { return paquete_(m, a[0]); } },
     registroPin: { registro: 1, e: 1, f: function (m, a) { return crearPinPropio_(m, a[0]); } },
     registroGuardar: { registro: 1, e: 1, f: function (m, a) { if (!tienePinPropio_(m)) throw new ErrorUsuario('Primero creá tu PIN.'); return guardarBorrador_(m, a[0]); } },
     registroResumen: { registro: 1, f: function (m) { return { resumen: resumenRegistro_(m, limpiarBorrador_(borradorDe_(m))), push: pushActivo_(m) }; } },
@@ -158,8 +159,22 @@ function doPost(e) {
   return ContentService.createTextOutput(JSON.stringify({ r: r === undefined ? null : r })).setMimeType(ContentService.MimeType.JSON);
 }
 
-function api(token, metodo, args) {
+// Todo lo que muestra la app en una sola llamada: se guarda en el celular y las pantallas se arman desde ahí.
+// mesVista: el mes que está mirando, si no es el actual ni el siguiente.
+function paquete_(m, mesVista) {
+  if (!tienePinPropio_(m) || !registroCompleto_(m)) return { inicio: apiInicio_(m) };
+  const actual = mesDe_(hoy_());
+  const meses = [actual, sumarMeses_(actual, 1)];
+  if (esMesValido_(String(mesVista || '')) && meses.indexOf(mesVista) < 0) meses.push(mesVista);
+  const p = { inicio: apiInicio_(m), meses: {}, libres: apiLibres_(m), vacaciones: apiVacaciones_(m), deudas: apiDeudas_(m), contrato: apiContrato_(m) };
+  meses.forEach(function (mes) { p.meses[mes] = apiMiMes_(m, [mes]); });
+  return JSON.parse(JSON.stringify(p));
+}
+
+// opciones.mes: el mes que está mirando. Las escrituras devuelven también el paquete actualizado.
+function api(token, metodo, args, opciones) {
   reiniciarEstado_();
+  const inicioMs = Date.now();
   try {
     const m = medicoDeSesion_(token);
     if (!m) return { ok: false, sesion: true, error: 'Tu sesión venció. Entrá de nuevo.' };
@@ -171,7 +186,13 @@ function api(token, metodo, args) {
     if (def.admin && !esSi_(m.es_admin)) return { ok: false, error: 'Solo el jefe puede hacer esto.' };
     const a = Array.isArray(args) ? args : [];
     const datos = def.e ? conLock_(function () { return def.f(m, a); }) : def.f(m, a);
-    return { ok: true, datos: JSON.parse(JSON.stringify(datos === undefined ? null : datos)) };
+    const r = { ok: true, datos: JSON.parse(JSON.stringify(datos === undefined ? null : datos)) };
+    if (def.e) {
+      const yo = buscarPorId_('MEDICOS', m.id) || m;
+      if (registroCompleto_(yo) && tienePinPropio_(yo)) r.paquete = paquete_(yo, opciones && opciones.mes);
+    }
+    r.ms = Date.now() - inicioMs;
+    return r;
   } catch (e) {
     if (e instanceof ErrorUsuario) return { ok: false, error: e.message };
     console.error(e);
@@ -185,6 +206,7 @@ function apiInicio_(m) {
     yo: { id: m.id, nombre: m.nombre_apellido, admin: esSi_(m.es_admin), push: pushActivo_(m), push_listo: pushConfigurado_(),
       vinculo: vinculoDe_(m), email: m.email || '' },
     hoy: hoyStr,
+    primer_mes: cfg_('primer_mes'),
     registro: tienePinPropio_(m) && registroCompleto_(m) ? null : estadoRegistro_(m),
     recordar_avisos: registroCompleto_(m) && !pushActivo_(m) && !m.email,
     dias: DIAS.slice(1).concat(DIAS[0]),
@@ -202,6 +224,7 @@ function apiInicio_(m) {
 function vistaGuardia_(g, m) {
   const oculto = ocultaTitular_(g, m);
   const titular = g.medico_titular_id && !oculto ? nombreDe_(g.medico_titular_id) : '';
+  const referencia = !mesAutomatico_(mesDe_(g.fecha));
   const hizo = g.medico_que_hizo_id ? nombreDe_(g.medico_que_hizo_id) : '';
   const esTitular = g.medico_titular_id === m.id;
   const esHizo = g.medico_que_hizo_id === m.id;
@@ -220,13 +243,14 @@ function vistaGuardia_(g, m) {
     id: g.id, fecha: g.fecha, turno: g.turno, turno_nombre: TURNOS[g.turno].nombre, categoria: g.categoria,
     tipo: g.tipo, tipo_nombre: nombreTipo_(g.tipo), estado: g.estado, titular: titular, hizo: hizo,
     observacion: g.observacion, es_titular: esTitular, es_hizo: esHizo,
-    debe_responder: debeResponder,
-    puede_hago_yo: esTitular && !anulada && !(confirmada && (cerrado || !esHizo)) && (g.fecha <= hoy_() || esAnticipable_(g.fecha)),
+    debe_responder: debeResponder && !referencia,
+    referencia: referencia,
+    puede_hago_yo: !referencia && esTitular && !anulada && !(confirmada && (cerrado || !esHizo)) && (g.fecha <= hoy_() || esAnticipable_(g.fecha)),
     anticipable: esAnticipable_(g.fecha),
     control_pendiente: esHizo && controlPendiente_(g),
     control: g.control_anticipada,
-    puede_cubrir: esTitular && !anulada && !(confirmada && cerrado) && !esSoloReemplazo_(m),
-    acciones: accionesDe_(g, m),
+    puede_cubrir: !referencia && esTitular && !anulada && !(confirmada && cerrado) && !esSoloReemplazo_(m),
+    acciones: referencia ? [] : accionesDe_(g, m),
     deshacer_min: minutosParaDeshacer_(g, m),
     tipos_posibles: tipos,
     sugerido: sugerirTipo_(g.medico_titular_id, g.fecha),
@@ -238,15 +262,17 @@ function vistaGuardia_(g, m) {
     libre_ajena: oculto,
     en_bolsa: esLibre_(g),
     origen: g.origen || '',
-    puede_liberar: esTitular && esHizo && g.estado === ESTADO.PREVISTA && g.fecha >= hoy_() && !cerrado && !esSoloReemplazo_(m),
+    puede_liberar: !referencia && esTitular && esHizo && g.estado === ESTADO.PREVISTA && g.fecha >= hoy_() && !cerrado && !esSoloReemplazo_(m),
     puede_recuperar: esTitular && esLibre_(g) && g.origen === ORIGEN.LIBERADA
   };
 }
 
 function colorPara_(g, m) {
+  if (!mesAutomatico_(mesDe_(g.fecha))) return 'referencia';
   if (g.estado === ESTADO.CONFLICTO) return 'conflicto';
   if (g.estado === ESTADO.ESPERANDO) return 'espera';
   if (g.medico_titular_id === m.id && g.medico_que_hizo_id && g.medico_que_hizo_id !== m.id) return 'cubierta';
+  if (g.estado === ESTADO.PREVISTA && g.tipo === TIPO.CONTRATO && g.medico_titular_id === m.id && g.medico_que_hizo_id === m.id) return 'contrato';
   if (g.estado === ESTADO.PREVISTA) return 'prevista';
   if (g.estado === ESTADO.ANTICIPADA) return 'anticipada';
   if (g.tipo === TIPO.HOSPITAL) return 'reemplazo';
@@ -287,7 +313,12 @@ function apiMiMes_(m, a) {
         fecha: f,
         no_habil: categoriaDe_(f) === 'NO_HABIL',
         vacaciones: vacaciones.some(function (v) { return v.desde <= f && f <= v.hasta; }),
-        guardias: delDia.map(function (g) { return { id: g.id, color: colorPara_(g, m), texto: g.horas + ' h' }; })
+        guardias: delDia.map(function (g) {
+          return { id: g.id, color: colorPara_(g, m), texto: (g.tipo === TIPO.CONTRATO && g.medico_titular_id === m.id ? 'C ' : '') + g.horas + ' h' };
+        }),
+        // Turnos que ese día ya hace él: la pantalla no ofrece cargar algo que se superponga.
+        ocupado: delDia.filter(function (g) { return g.medico_que_hizo_id === m.id; }).map(function (g) { return g.turno; }),
+        ocupado_texto: (function () { const p = delDia.find(function (g) { return g.medico_que_hizo_id === m.id; }); return p ? textoSuperposicion_(p, m.id) : ''; })()
       };
     })
   };

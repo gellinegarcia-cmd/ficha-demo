@@ -82,6 +82,7 @@ function textoGuardia_(g) {
 // Confirmar tarde se puede; tocar lo que ya salió en el Excel de un mes cerrado, no.
 function exigirEditable_(g) {
   if (g.estado === ESTADO.ANULADA) throw new ErrorUsuario('Esa guardia está anulada.');
+  exigirMesDeLaApp_(g.fecha);
   if (estaConfirmada_(g) && mesCerrado_(g.mes_facturacion)) {
     throw new ErrorUsuario('Esa guardia ya está confirmada y el mes de ' + nombreMes_(g.mes_facturacion) + ' cerró.');
   }
@@ -90,6 +91,7 @@ function exigirEditable_(g) {
 // Editar, desmarcar y anular solo mientras el mes en que se factura siga abierto.
 function exigirMesAbierto_(g) {
   if (g.estado === ESTADO.ANULADA) throw new ErrorUsuario('Esa guardia está anulada.');
+  exigirMesDeLaApp_(g.fecha);
   if (mesCerrado_(g.mes_facturacion)) throw new ErrorUsuario(MENSAJE_MES_CERRADO);
 }
 
@@ -103,11 +105,29 @@ function exigirNoConfirmadaPorOtro_(g, m) {
   }
 }
 
-function exigirSinSuperponer_(medicoId, fecha, turno, salvoId) {
-  const pisa = filas_('GUARDIAS').some(function (g) {
+// La guardia propia (que hace él) que se superpone en horario: 24 h pisa todo; 12 h de día y 12 h de noche no se pisan.
+function superposicion_(medicoId, fecha, turno, salvoId) {
+  return filas_('GUARDIAS').find(function (g) {
     return g.id !== salvoId && g.estado !== ESTADO.ANULADA && g.medico_que_hizo_id === medicoId && g.fecha === fecha && turnosSePisan_(g.turno, turno);
-  });
-  if (pisa) throw new ErrorUsuario('Ya tenés una guardia que se superpone ese día.');
+  }) || null;
+}
+function textoSuperposicion_(g, medicoId) {
+  const que = g.tipo === TIPO.CONTRATO && g.medico_titular_id === medicoId ? 'guardia de contrato'
+    : g.origen && g.medico_titular_id !== medicoId ? 'una guardia que tomaste' : 'un reemplazo';
+  return 'Ese día ya tenés ' + que + ' de ' + TURNOS[g.turno].nombre + '.';
+}
+const MENSAJE_AUSENTE = 'Ese día estás ausente (vacaciones o licencia): no podés cargar ni tomar guardias.';
+function exigirSinSuperponer_(medicoId, fecha, turno, salvoId) {
+  if (estaDeVacaciones_(medicoId, fecha)) throw new ErrorUsuario(MENSAJE_AUSENTE);
+  const g = superposicion_(medicoId, fecha, turno, salvoId);
+  if (g) throw new ErrorUsuario(textoSuperposicion_(g, medicoId));
+}
+
+// Antes de CONFIG.primer_mes las guardias se manejan a mano: la app las muestra solo como referencia.
+function exigirMesDeLaApp_(fecha) {
+  if (!mesAutomatico_(mesDe_(fecha))) {
+    throw new ErrorUsuario('Las guardias de ' + nombreMes_(mesDe_(fecha)) + ' se manejan a mano: en la app empiezan en ' + nombreMesAnio_(cfg_('primer_mes')) + '.');
+  }
 }
 
 function tipoBase_(g) {
@@ -328,6 +348,7 @@ function cargarGuardia_(m, datos) {
   const titularId = String(datos.titular_id || '');
   if (!esFechaValida_(fecha)) throw new ErrorUsuario('Elegí la fecha.');
   if (!TURNOS[turno]) throw new ErrorUsuario('Elegí el turno.');
+  exigirMesDeLaApp_(fecha);
   if (mesCerrado_(mesDe_(fecha)) && datos.reclamo !== true) throw new ErrorUsuario(MENSAJE_MES_CERRADO);
   if (titularId === m.id) throw new ErrorUsuario('Esa guardia es tuya: confirmala desde Mi mes.');
   if (titularId && !buscarPorId_('MEDICOS', titularId)) throw new ErrorUsuario('No encontré a ese médico.');
@@ -724,10 +745,12 @@ function guardarFija_(medicoId, filas) {
 }
 
 // Solo las de ese médico: a los demás no se les puede rehacer una guardia que anularon.
+// Al registrarse, al cambiar la guardia fija o al activarlo: el mes actual (desde hoy) y el siguiente, sin
+// esperar al día 1. No hace falta que el mes esté "abierto": la apertura del día 1 no duplica.
 function sembrarDesdeHoy_(medicoId) {
   const hoyStr = hoy_();
   const mes = mesDe_(hoyStr);
-  if (filaCierre_(mes) && !mesCerrado_(mes)) sembrarGuardias_(mes, hoyStr, medicoId);
+  [mes, sumarMeses_(mes, 1)].forEach(function (m) { sembrarGuardias_(m, hoyStr, medicoId); });
 }
 
 // Primer ingreso: el médico revisa la guardia fija que se le cargó.

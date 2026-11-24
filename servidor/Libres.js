@@ -9,7 +9,7 @@ const DIAS_AVISO_LIBRE = 7;
 
 // Libre = el titular no la hace, nadie la tomó todavía, y es de hoy en adelante.
 function esLibre_(g) {
-  return g.estado === ESTADO.PREVISTA && !!g.medico_titular_id && !g.medico_que_hizo_id && g.observacion === SIN_CUBRIR &&
+  return mesAutomatico_(mesDe_(g.fecha)) && g.estado === ESTADO.PREVISTA && !!g.medico_titular_id && !g.medico_que_hizo_id && g.observacion === SIN_CUBRIR &&
     g.fecha >= hoy_() && !mesCerrado_(g.mes_facturacion);
 }
 function libres_() {
@@ -92,7 +92,6 @@ function tomarGuardia_(m, gId) {
     registrar_(m.nombre_apellido, 'recupero_guardia', 'guardia ' + g.id);
     return g;
   }
-  if (estaDeVacaciones_(m.id, g.fecha)) throw new ErrorUsuario('Ese día estás ausente.');
   exigirSinSuperponer_(m.id, g.fecha, g.turno);
   g.medico_que_hizo_id = m.id;
   g.observacion = '';
@@ -169,11 +168,16 @@ function tareaLibresSinTomar_(fecha) {
 
 function apiLibres_(m) {
   return libres_().map(function (g) {
+    const propia = g.medico_titular_id === m.id;
+    const pisa = propia ? null : superposicion_(m.id, g.fecha, g.turno);
+    const ausente = !propia && estaDeVacaciones_(m.id, g.fecha);
     return {
+      turno_id: g.turno, horas: g.horas,
+      no_puede: ausente ? 'Ese día estás ausente.' : pisa ? textoSuperposicion_(pisa, m.id) : '',
       id: g.id, fecha: g.fecha, dia: DIAS_CON_TILDE[DIAS[diaSemana_(g.fecha)]], turno: TURNOS[g.turno].nombre,
       categoria: categoriaDe_(g.fecha) === 'NO_HABIL' ? 'no hábil' : 'hábil', paga: quienPagaLibre_(g),
       mia: g.medico_titular_id === m.id,
-      puede_tomar: g.medico_titular_id !== m.id || g.origen === ORIGEN.LIBERADA
+      puede_tomar: (!propia && !pisa && !ausente) || (propia && g.origen === ORIGEN.LIBERADA)
     };
   });
 }

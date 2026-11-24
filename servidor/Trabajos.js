@@ -111,6 +111,7 @@ function tieneGuardiasEnMes_(m, mes) {
 // A quien hace la guardia ese día: el titular, o quien cargó que lo va a cubrir.
 // Una guardia confirmada por adelantado se controla ese día.
 function tareaRecordatorioDiario_(fecha) {
+  if (!mesAutomatico_(mesDe_(fecha))) return; // antes de primer_mes se maneja a mano
   filas_('GUARDIAS').filter(function (g) {
     return g.fecha === fecha && g.medico_que_hizo_id && (g.estado === ESTADO.PREVISTA || controlPendiente_(g));
   }).forEach(function (g) {
@@ -132,6 +133,7 @@ function tareaRecordatorioDiario_(fecha) {
 
 // Guardias que todavía esperan una respuesta de ese médico, incluidas las que pasaron como reclamo.
 function pendientesDe_(m, mes) {
+  if (!mesAutomatico_(mes)) return [];
   const hoyStr = hoy_();
   return filas_('GUARDIAS').filter(function (g) {
     const esHizo = g.medico_que_hizo_id === m.id;

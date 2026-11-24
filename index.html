@@ -931,7 +931,16 @@ async function regResumen() {
   pintar(progreso(5), bloqueAviso(), el('h2', null, 'Revisá tus datos'),
     el('div', { class: 'tarjeta destacado', id: 'r-resumen' }, r.resumen),
     el('button', { class: 'grande', id: 'r-confirmar', onclick: regAccion(async () => {
-      await llamar('registroConfirmar');
+      // Tarda unos segundos: se muestra qué está haciendo, para que nadie cierre la app.
+      const pasos = ['Guardando tus datos…', 'Creando tus guardias de este mes y el siguiente…', 'Ya casi está…'];
+      const texto = el('div', { class: 'destacado', id: 'r-progreso' }, pasos[0]);
+      const barra = el('span', { style: 'width:10%;transition:width 1s linear' });
+      pintar(el('h2', null, 'Creando tus guardias…'), el('div', { class: 'tarjeta' }, texto,
+        el('div', { class: 'progreso' }, el('div', { class: 'barra' }, barra)),
+        el('p', { class: 'suave', style: 'margin-bottom:0' }, 'Puede tardar hasta medio minuto. No cierres la app.')));
+      let t = 0;
+      const reloj = setInterval(() => { t++; barra.style.width = Math.min(95, 10 + t * 4) + '%'; texto.textContent = pasos[Math.min(pasos.length - 1, Math.floor(t / 6))]; }, 1000);
+      try { await llamar('registroConfirmar'); } finally { clearInterval(reloj); }
       if (!paquete || !paquete.meses) aplicarPaquete(await llamar('paquete'));
       $('btn-jefe').hidden = !datos.yo.admin;
       aviso = { texto: '¡Listo! Ya podés usar la app. Todo se puede cambiar después desde Mi perfil.' };

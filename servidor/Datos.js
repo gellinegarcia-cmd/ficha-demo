@@ -26,7 +26,13 @@ let _cacheLibro = null;
 let _mesesSucios = {};
 let _actor = 'sistema';
 
+// Dentro de una ejecución (que escribe con el bloqueo tomado): el encabezado y la última fila de cada hoja
+// se leen una sola vez, en vez de una vez por fila.
+let _cabeceras = {};
+let _ultimaFila = {};
 function reiniciarEstado_() {
+  _cabeceras = {};
+  _ultimaFila = {};
   _cacheTablas = {};
   _cacheLibro = null;
   _mesesSucios = {};
@@ -127,7 +133,8 @@ function siguienteId_(nombre) {
 
 // Si a la hoja le falta una columna del ESQUEMA (por ej., una versión nueva antes de correr "Instalar"),
 // se agrega al final antes de escribir. Si no, el dato se perdería en silencio.
-function aFilaHoja_(nombre, obj) {
+function cabeceraDe_(nombre) {
+  if (_cabeceras[nombre]) return _cabeceras[nombre];
   const hoja = hoja_(nombre);
   let cab = hoja.getRange(1, 1, 1, Math.max(hoja.getLastColumn(), 1)).getValues()[0].map(textoCelda_);
   while (cab.length && cab[cab.length - 1] === '') cab.pop();
@@ -137,6 +144,12 @@ function aFilaHoja_(nombre, obj) {
     hoja.getRange(2, cab.length + 1, Math.max(hoja.getMaxRows() - 1, 1), faltan.length).setNumberFormat('@');
     cab = cab.concat(faltan);
   }
+  _cabeceras[nombre] = cab;
+  return cab;
+}
+
+function aFilaHoja_(nombre, obj) {
+  const cab = cabeceraDe_(nombre);
   return cab.map(function (c) {
     const v = obj[c];
     if (v === true) return 'TRUE';
@@ -162,9 +175,10 @@ function escribirFilaNueva_(nombre, obj) {
   olvidarCache_(nombre);
   const hoja = hoja_(nombre);
   const fila = aFilaHoja_(nombre, obj);
-  const n = hoja.getLastRow() + 1;
+  const n = (_ultimaFila[nombre] || hoja.getLastRow()) + 1;
   if (n > hoja.getMaxRows()) hoja.insertRowsAfter(hoja.getMaxRows(), 50);
   hoja.getRange(n, 1, 1, fila.length).setNumberFormat('@').setValues([fila]);
+  _ultimaFila[nombre] = n;
   return n;
 }
 

@@ -129,18 +129,22 @@ function validarBorrador_(b) {
 function confirmarRegistro_(m) {
   if (!tienePinPropio_(m)) throw new ErrorUsuario('Primero creá tu PIN.');
   const b = limpiarBorrador_(borradorDe_(m));
+  // Todo o nada: primero se valida y se arma todo lo que puede fallar; recién después se escribe.
+  // (La planilla no deshace lo escrito si algo falla a la mitad.)
   const filas = validarBorrador_(b);
+  validarFija_(filas, b.vinculo === VINCULO.SOLO);
   const anterior = vinculoDe_(m);
+  const resumen = resumenRegistro_(Object.assign({}, m, { email: b.email || m.email }), b);
   m.vinculo = b.vinculo;
   if (b.email) m.email = b.email;
   guardar_('MEDICOS', m);
-  guardarFija_(m.id, filas);
-  if (b.tiene_vacaciones && b.vacaciones) agregarVacaciones_(m, b.vacaciones);
-  const resumen = resumenRegistro_(m, b);
+  guardarFija_(m.id, filas); // anula las futuras sin tocar y las vuelve a generar: repetirlo no duplica
+  if (b.tiene_vacaciones && b.vacaciones && !filas_('VACACIONES').some(function (v) {
+    return v.medico_id === m.id && v.estado !== 'cancelada' && v.desde === b.vacaciones.desde && v.hasta === b.vacaciones.hasta;
+  })) agregarVacaciones_(m, b.vacaciones);
   m.contrato_revisado = true;
   m.registro = '';
   guardar_('MEDICOS', m);
-  sembrarDesdeHoy_(m.id);
   if (anterior !== m.vinculo) registrar_(m.nombre_apellido, 'cambio_vinculo', anterior + ' → ' + m.vinculo);
   registrar_(m.nombre_apellido, 'registro_completo', resumen);
   return { resumen: resumen };

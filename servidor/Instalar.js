@@ -200,6 +200,7 @@ function borrarDatosPrueba_() {
       .sort(function (a, b) { return b._f - a._f; })
       .forEach(function (f) { hoja_(tabla).deleteRow(f._f); });
     delete _cacheTablas[tabla];
+    delete _ultimaFila[tabla];
   };
   limpiar('DEUDAS', ['deudor_id', 'acreedor_id']);
   limpiar('GUARDIAS', ['medico_que_hizo_id', 'medico_titular_id']);

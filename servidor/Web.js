@@ -211,7 +211,8 @@ function api(token, metodo, args, opciones) {
     const r = { ok: true, datos: JSON.parse(JSON.stringify(datos === undefined ? null : datos)) };
     if (def.e) {
       const yo = buscarPorId_('MEDICOS', m.id) || m;
-      if (registroCompleto_(yo) && tienePinPropio_(yo)) r.paquete = paquete_(yo, opciones && opciones.mes);
+      // Si armar el paquete falla, lo guardado igual quedó: no se informa error (si no, la app reintentaría y duplicaría).
+      try { if (registroCompleto_(yo) && tienePinPropio_(yo)) r.paquete = paquete_(yo, opciones && opciones.mes); } catch (ep) { console.error(ep); avisarErrorServidor_(metodo + ' (paquete)', ep, token); }
     }
     r.ms = Date.now() - inicioMs;
     return r;

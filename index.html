@@ -98,7 +98,7 @@
 </head>
 <body><div id="demo-cartel" style="background:#b45309;color:#fff;padding:8px 12px;font:600 14px/1.35 system-ui,Arial,sans-serif;text-align:center">
   DEMO — datos de prueba
-  <div style="font-weight:400;font-size:12px;margin-top:2px">Todos los PIN: 1111 · Código del servicio para registrarse: DEMO24 · Jefe: JAVIER GARCIA · PAULA RIOS: registro desde cero · SOFIA LUNA: solo reemplazos · Los avisos se ven acá arriba (simulados): no usa la planilla real ni manda mensajes</div>
+  <div style="font-weight:400;font-size:12px;margin-top:2px">Todos los PIN: 1111 · Código del servicio para registrarse: DEMO24 · Jefe: JAVIER GARCIA (pestaña Mi servicio) · NICOLAS QUIROGA: ausente, 2 guardias libres (una ya tomada) · PAULA RIOS: registro desde cero · SOFIA LUNA: solo reemplazos · Los avisos se ven acá arriba (simulados): no usa la planilla real ni manda mensajes</div>
   <div style="margin-top:6px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
     <button type="button" id="demo-recordatorio" style="font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer">Simular el aviso de las 8:00</button>
     <button type="button" id="demo-mensajes" style="font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer">Avisos y mails enviados</button>
@@ -243,9 +243,10 @@ document.querySelectorAll('img.logo-app').forEach((i) => { i.src = LOGO; });
 const DIAS_CAB = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 const TIPOS = { CONTRATO: 'Contrato', REEMPLAZO_HOSPITAL: 'Paga el hospital', COBERTURA_COMPANERO: 'Paga el compañero' };
 const ESTADOS = { PREVISTA: 'Prevista', CONFIRMADA: 'Confirmada', CONFIRMADA_ANTICIPADA: 'Confirmada por adelantado', ESPERANDO_CONFIRMACION_TITULAR: 'Esperando confirmación', EN_CONFLICTO: 'En conflicto', ANULADA: 'Anulada' };
-const NAV_MEDICO = [['mes', 'Mi mes'], ['vacaciones', 'Vacaciones'], ['deudas', 'Deudas'], ['contrato', 'Mi perfil']];
-const NAV_JEFE = [['tablero', 'Tablero'], ['conflictos', 'Conflictos'], ['excel', 'Excel'], ['medicos', 'Médicos'], ['ajustes', 'Ajustes']];
-const VISTAS_JEFE = NAV_JEFE.map(n => n[0]);
+const NAV_MEDICO = [['mes', 'Mi mes'], ['vacaciones', 'Ausencias'], ['deudas', 'Deudas'], ['contrato', 'Mi perfil']];
+const NAV_SERVICIO = ['servicio', 'Mi servicio'];
+const NAV_JEFE = [['servicio', '‹ Mi servicio'], ['tablero', 'Tablero'], ['conflictos', 'Conflictos'], ['excel', 'Excel'], ['medicos', 'Médicos'], ['ajustes', 'Ajustes']];
+const VISTAS_JEFE = NAV_JEFE.map(n => n[0]).filter((v) => v !== 'servicio');
 
 let token = leer();
 let datos = null;
@@ -483,7 +484,7 @@ async function arrancar() {
   mesActual = datos.hoy.slice(0, 7);
   $('cab').hidden = false;
   $('cab-nombre').textContent = datos.yo.nombre;
-  $('btn-jefe').hidden = !datos.yo.admin;
+  $('btn-jefe').hidden = true;
   if (datos.registro) return pantallaRegistro();
   seguirAlInicio();
 }
@@ -715,18 +716,21 @@ async function regResumen() {
 }
 
 function ir(v) {
+  if (v === 'servicio') modoJefe = false;
   vista = v;
   pintarNav();
   const pantallas = { mes: verMes, cargar: () => verCargar(datos.hoy), vacaciones: verVacaciones, deudas: verDeudas, contrato: verContrato,
-    tablero: verTablero, conflictos: verConflictos, excel: verExcel, medicos: verMedicos, ajustes: verAjustes };
+    tablero: verTablero, conflictos: verConflictos, excel: verExcel, medicos: verMedicos, ajustes: verAjustes,
+    libres: verLibres, servicio: () => (datos.yo.admin ? verServicio() : verMes()) };
   (pantallas[v] || verMes)();
 }
 function pintarNav() {
   const nav = $('nav');
   nav.hidden = false;
   $('fijo').hidden = modoJefe || vista !== 'mes' || esSolo();
-  $('btn-jefe').textContent = modoJefe ? 'Vista médico' : 'Vista jefe';
-  nav.replaceChildren(...(modoJefe ? NAV_JEFE : NAV_MEDICO).map(([k, t]) => el('button', { class: vista === k ? 'activo' : '', onclick: () => ir(k) }, t)));
+  $('btn-jefe').hidden = true; // la Vista jefe ahora es la pestaña "Mi servicio"
+  const lista = modoJefe ? NAV_JEFE : NAV_MEDICO.concat(datos && datos.yo.admin ? [NAV_SERVICIO] : []);
+  nav.replaceChildren(...lista.map(([k, t]) => el('button', { class: vista === k ? 'activo' : '', onclick: () => ir(k) }, t)));
 }
 $('btn-salir').addEventListener('click', salir);
 $('btn-cargar').addEventListener('click', () => verCargar(datos.hoy));
@@ -752,10 +756,11 @@ async function verMes() {
       onclick: () => (dia.guardias.length ? irConfirmar(dia.guardias[0].id) : verCargar(dia.fecha))
     }, el('span', { class: 'num' }, Number(dia.fecha.slice(8))), fichas));
   });
-  const leyenda = [['prevista', 'Prevista'], ['confirmada', 'Confirmada'], ['anticipada', 'Por adelantado'], ['cubierta', 'Cubierta'], ['reemplazo', 'Reemplazo'], ['vacaciones', 'Vacaciones'], ['espera', 'Esperando'], ['conflicto', 'Conflicto']];
+  const leyenda = [['prevista', 'Prevista'], ['confirmada', 'Confirmada'], ['anticipada', 'Por adelantado'], ['cubierta', 'Cubierta'], ['reemplazo', 'Reemplazo'], ['vacaciones', 'Ausente'], ['espera', 'Esperando'], ['conflicto', 'Conflicto']];
   pintar(
     bloqueAviso(),
     esSolo() ? el('button', { class: 'grande verde', id: 'btn-cargar-reemplazo', onclick: () => verCargar(datos.hoy) }, '+ Cargar reemplazo') : null,
+    el('button', { class: 'grande' + (d.libres ? '' : ' sec'), id: 'btn-libres', onclick: () => ir('libres') }, 'Guardias libres (' + d.libres + ')'),
     datos.recordar_avisos ? el('div', { class: 'regla' }, 'Todavía no activaste los avisos: no te vamos a poder recordar tus guardias. ',
       el('button', { class: 'chico', onclick: () => ir('contrato') }, 'Activar avisos')) : null,
     el('div', { class: 'tarjeta' }, el('div', { class: 'destacado' }, 'Reemplazos confirmados este mes: ' + d.reemplazos + (d.reemplazos ? ', se cobran el ' + d.cobro : '')),
@@ -773,6 +778,8 @@ async function verMes() {
   );
 }
 function textoCobertura(g) {
+  if (g.libre_ajena) return 'Guardia libre que tomaste';
+  if (g.es_titular && g.en_bolsa) return 'En la bolsa de guardias libres';
   if (g.es_titular && g.hizo && !g.es_hizo) return 'Cubierta por ' + g.hizo;
   if (g.es_hizo && g.titular && !g.es_titular) return 'Cubrís a ' + g.titular;
   if (g.es_hizo && !g.titular) return 'Puesto vacante';
@@ -837,11 +844,75 @@ function pintarConfirmar(g) {
   const soloResponder = g.debe_responder && g.estado !== 'EN_CONFLICTO';
   if (g.puede_hago_yo && !soloResponder) nodos.push(el('button', { class: 'grande', onclick: accion(async () => { hecho(g.anticipable ? 'Confirmada por adelantado.' : 'Guardia confirmada.', await llamar('hagoYo', g.id)); }) }, g.anticipable ? 'La hago yo (confirmar por adelantado)' : 'La hago yo'));
   if (g.puede_cubrir && !soloResponder) nodos.push(el('button', { class: 'grande sec', onclick: () => pintarMeCubre(g) }, 'Me cubre…'));
+  if (g.puede_liberar && !soloResponder) nodos.push(el('button', { class: 'grande sec', id: 'btn-liberar', onclick: () => pintarLiberar(g) }, 'Liberar (la pongo en la bolsa)'));
+  if (g.en_bolsa && g.es_titular) nodos.push(el('div', { class: 'regla' }, 'Esta guardia está en la bolsa de guardias libres: el primero que la tome la hace.'));
+  if (g.puede_recuperar) nodos.push(el('button', { class: 'grande sec', id: 'btn-recuperar', onclick: accion(async () => { await llamar('tomarLibre', g.id); hecho('Listo: la guardia volvió a ser tuya.'); }) }, 'La hago yo (sacarla de la bolsa)'));
   nodos.push(el('div', { style: 'margin:10px 0' }, botonesMenu(Object.assign({}, g, { debe_responder: false, puede_hago_yo: false, puede_cubrir: false }))));
   if (!g.acciones.length && g.cerrado) nodos.push(el('div', { class: 'regla' }, 'Este mes ya cerró y no se puede editar. Lo que falte, cargalo como "reclamo mes anterior" con + Cargar guardia.'));
   nodos.push(el('button', { class: 'grande sec', onclick: () => ir('mes') }, 'Volver'));
   pintar(nodos);
 }
+// Cambio personal: la guardia sale a la bolsa y el titular elige quién le paga a quien la tome.
+function pintarLiberar(g) {
+  const liberar = (tipo) => accion(async () => {
+    await llamar('liberarGuardia', g.id, tipo);
+    aviso = { texto: 'Listo: tu guardia del ' + fechaLinda(g.fecha) + ' está en la bolsa. Te avisamos cuando alguien la tome.' };
+    ir('mes');
+  });
+  pintar(bloqueAviso(), resumenGuardia(g), el('h3', null, '¿Quién le paga a quien la tome?'),
+    el('button', { class: 'grande', id: 'liberar-hospital', onclick: liberar('REEMPLAZO_HOSPITAL') }, 'El hospital'),
+    el('button', { class: 'grande sec', id: 'liberar-yo', onclick: liberar('COBERTURA_COMPANERO') }, 'Yo (le pago a quien la tome)'),
+    el('p', { class: 'suave' }, 'Les llega un aviso a todos. Mientras nadie la tome, la podés volver a hacer vos.'),
+    el('button', { class: 'grande sec', onclick: () => irConfirmar(g.id) }, 'Volver'));
+}
+
+// --- Guardias libres: las ve todo el servicio. Nunca dicen quién se ausenta. ---
+async function verLibres() {
+  cargando();
+  let lista;
+  try { lista = await llamar('libres'); } catch (e) { return mostrarError(e); }
+  const tomar = (l) => accion(async () => {
+    await llamar('tomarLibre', l.id);
+    aviso = { texto: l.mia ? 'Listo: la guardia volvió a ser tuya.' : 'Es tuya: ' + l.dia + ' ' + fechaLinda(l.fecha) + ', ' + l.turno + '. Ese día la fichás como cualquier reemplazo.' };
+    ir('mes');
+  });
+  pintar(bloqueAviso(), el('h2', null, 'Guardias libres (' + lista.length + ')'),
+    el('p', { class: 'suave' }, 'El primero que toca "La tomo" se la queda. Queda en tu mes y ese día la fichás como cualquier reemplazo.'),
+    lista.length ? lista.map((l) => el('div', { class: 'tarjeta', 'data-libre': l.id },
+      el('div', { class: 'destacado' }, l.dia.charAt(0).toUpperCase() + l.dia.slice(1) + ' ' + fechaLinda(l.fecha)),
+      el('div', null, l.turno + ' · ' + l.categoria),
+      el('div', { class: 'suave' }, l.paga + (l.mia ? ' · es tuya, la liberaste vos' : '')),
+      l.puede_tomar ? el('button', { class: 'grande', style: 'margin:10px 0 0', onclick: tomar(l) }, l.mia ? 'La hago yo' : 'La tomo') : null))
+      : el('div', { class: 'tarjeta suave' }, 'No hay guardias libres.'),
+    el('button', { class: 'grande sec', onclick: () => ir('mes') }, 'Volver'));
+}
+
+// --- Jefe: Mi servicio. Solo para mirar: nunca pide aprobaciones. ---
+async function verServicio() {
+  cargando();
+  let d;
+  try { d = await llamar('servicio'); } catch (e) { return mostrarError(e); }
+  const vacio = (t) => el('div', { class: 'suave' }, t);
+  const herramienta = (v, t) => el('button', { class: 'grande sec', onclick: () => { modoJefe = true; ir(v); } }, t);
+  pintar(bloqueAviso(), el('h2', null, 'Mi servicio'),
+    el('h3', null, 'Próximas ausencias (4 semanas)'),
+    el('div', { class: 'tarjeta', id: 's-ausencias' }, d.ausencias.length ? d.ausencias.map((a) => el('div', { class: 'fila' },
+      el('b', null, a.nombre), el('span', null, fechaLinda(a.desde) + ' al ' + fechaLinda(a.hasta) + ' · ' + (a.tipo === 'licencia' ? 'Licencia' : 'Vacaciones')))) : vacio('Nadie se ausenta en las próximas 4 semanas.')),
+    el('h3', null, 'Guardias libres'),
+    el('div', { class: 'tarjeta', id: 's-libres' }, d.libres.length ? d.libres.map((l) => el('div', { class: 'fila' },
+      el('span', null, el('b', null, fechaLinda(l.fecha) + ' · ' + l.turno), el('br'), el('span', { class: 'suave' }, l.titular + ' (' + l.motivo + ')' + (l.paga === 'titular' ? ' · paga el titular' : ''))),
+      l.tomada ? el('span', { class: 'marca', style: 'background:#bfe6c9' }, 'Tomada: ' + l.quien) : el('span', { class: 'marca' }, 'Sin tomar'))) : vacio('No hay guardias libres.')),
+    el('h3', null, 'Cambios recientes (7 días)'),
+    el('div', { class: 'tarjeta', id: 's-cambios' }, d.cambios.length ? d.cambios.map((c) => el('div', { class: 'fila' },
+      el('span', null, el('b', null, c.quien), el('br'), el('span', { class: 'suave' }, c.que + (c.guardia ? ' · ' + c.guardia : ''))),
+      el('span', { class: 'suave' }, fechaLinda(c.cuando.slice(0, 10)).replace(/\/\d{4}$/, '') + ' ' + c.cuando.slice(11)))) : vacio('Sin cambios en la última semana.')),
+    el('h3', null, 'Herramientas'),
+    el('div', { class: 'tarjeta' }, el('div', null, 'Código del servicio para registrarse: ', el('b', { id: 's-codigo' }, d.codigo || '(registro cerrado)')),
+      el('div', { class: 'suave' }, 'Se cambia en Ajustes.')),
+    herramienta('medicos', 'Médicos'), herramienta('excel', 'Excel del mes'), herramienta('tablero', 'Tablero del mes'),
+    herramienta('conflictos', 'Conflictos'), herramienta('ajustes', 'Ajustes y código del servicio'));
+}
+
 function pintarControlCubierta(g) {
   const quien = el('select', { id: 'cc-quien' }, el('option', { value: '' }, 'Elegí…'), datos.companeros.map((c) => el('option', { value: c.id }, c.nombre)));
   const paga = selectorPaga(g.tipo === 'REEMPLAZO_HOSPITAL' ? g.tipo : 'COBERTURA_COMPANERO');
@@ -995,7 +1066,10 @@ async function verVacaciones() {
   try { lista = await llamar('vacaciones'); } catch (e) { return mostrarError(e); }
   const desde = el('input', { id: 'v-desde', type: 'date' });
   const hasta = el('input', { id: 'v-hasta', type: 'date' });
-  const tipo = el('select', { id: 'v-tipo' }, el('option', { value: 'vacaciones' }, 'Vacaciones'), el('option', { value: 'licencia' }, 'Licencia'));
+  const tipo = { value: 'vacaciones' };
+  const tipos = () => botonesOpcion([['vacaciones', 'Vacaciones'], ['licencia', 'Licencia']], tipo.value, (v) => { tipo.value = v; cajaTipo.replaceChildren(tipos()); });
+  const cajaTipo = el('div', { id: 'v-tipo' });
+  cajaTipo.append(tipos());
   let editando = null;
   const boton = el('button', { class: 'grande', type: 'submit' }, 'Guardar');
   const form = el('form', { class: 'tarjeta', onsubmit: async (ev) => {
@@ -1004,16 +1078,18 @@ async function verVacaciones() {
     const datosV = { desde: desde.value, hasta: hasta.value, tipo: tipo.value };
     try {
       if (editando) await llamar('editarVacaciones', editando, datosV); else await llamar('agregarVacaciones', datosV);
-      aviso = { texto: 'Guardado. Tus guardias de esas fechas se recalcularon.' };
+      aviso = { texto: 'Guardado. Tus guardias de esas fechas quedaron en la bolsa de guardias libres (paga el hospital).' };
     } catch (e) { aviso = { texto: e.message, error: true }; }
     verVacaciones();
-  } }, el('label', { htmlFor: 'v-desde' }, 'Desde'), desde, el('label', { htmlFor: 'v-hasta' }, 'Hasta'), hasta, el('label', { htmlFor: 'v-tipo' }, 'Tipo'), tipo, el('br'), boton);
-  pintar(bloqueAviso(), el('h2', null, 'Mis vacaciones'), form,
+  } }, el('label', { style: 'margin-top:0' }, 'Tipo'), cajaTipo, el('label', { htmlFor: 'v-desde' }, 'Desde'), desde, el('label', { htmlFor: 'v-hasta' }, 'Hasta'), hasta, el('br'), boton);
+  pintar(bloqueAviso(), el('h2', null, 'Me ausento'),
+    el('p', { class: 'suave' }, 'Tus guardias de esas fechas pasan a la bolsa de guardias libres y les llega un aviso a tus compañeros. Ellos no ven quién se ausenta ni por qué.'), form,
+    el('h3', null, 'Mis ausencias'),
     el('div', { class: 'tarjeta' }, lista.length ? lista.map((v) => el('div', { class: 'fila' },
       el('span', null, fechaLinda(v.desde) + ' a ' + fechaLinda(v.hasta) + ' (' + v.tipo + ')'),
       v.cerrado ? el('span', { class: 'suave' }, 'Mes cerrado') : el('span', null,
-        el('button', { class: 'chico', onclick: () => { editando = v.id; desde.value = v.desde; hasta.value = v.hasta; tipo.value = v.tipo; boton.textContent = 'Guardar cambios'; window.scrollTo(0, 0); } }, 'Cambiar'),
-        el('button', { class: 'chico', onclick: accion(async () => { await llamar('cancelarVacaciones', v.id); aviso = { texto: 'Vacaciones canceladas.' }; verVacaciones(); }) }, 'Cancelar')))) : el('span', { class: 'suave' }, 'No cargaste vacaciones.')));
+        el('button', { class: 'chico', onclick: () => { editando = v.id; desde.value = v.desde; hasta.value = v.hasta; tipo.value = v.tipo; cajaTipo.replaceChildren(tipos()); boton.textContent = 'Guardar cambios'; window.scrollTo(0, 0); } }, 'Cambiar'),
+        el('button', { class: 'chico', onclick: accion(async () => { await llamar('cancelarVacaciones', v.id); aviso = { texto: 'Ausencia cancelada. Tus guardias volvieron a ser tuyas.' }; verVacaciones(); }) }, 'Cancelar')))) : el('span', { class: 'suave' }, 'No cargaste ausencias.')));
 }
 
 // --- Médico: Deudas ---

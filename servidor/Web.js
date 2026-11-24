@@ -108,6 +108,10 @@ function tablaApi_() {
     deshacer: { e: 1, f: function (m, a) { return vistaGuardia_(deshacer_(m, a[0]), m); } },
     responderControl: { e: 1, f: function (m, a) { return vistaGuardia_(responderControl_(m, a[0], a[1], a[2]), m); } },
     vacaciones: { f: apiVacaciones_ },
+    libres: { f: apiLibres_ },
+    tomarLibre: { e: 1, f: function (m, a) { const g = tomarGuardia_(m, a[0]); return { guardia: vistaGuardia_(g, m), libres: apiLibres_(m) }; } },
+    liberarGuardia: { e: 1, f: function (m, a) { return vistaGuardia_(liberarGuardia_(m, a[0], a[1]), m); } },
+    servicio: { admin: 1, f: apiServicio_ },
     agregarVacaciones: { e: 1, f: function (m, a) { agregarVacaciones_(m, a[0] || {}); return apiVacaciones_(m); } },
     editarVacaciones: { e: 1, f: function (m, a) { editarVacaciones_(m, a[0], a[1] || {}); return apiVacaciones_(m); } },
     cancelarVacaciones: { e: 1, f: function (m, a) { cancelarVacaciones_(m, a[0]); return apiVacaciones_(m); } },
@@ -195,7 +199,8 @@ function apiInicio_(m) {
 }
 
 function vistaGuardia_(g, m) {
-  const titular = g.medico_titular_id ? nombreDe_(g.medico_titular_id) : '';
+  const oculto = ocultaTitular_(g, m);
+  const titular = g.medico_titular_id && !oculto ? nombreDe_(g.medico_titular_id) : '';
   const hizo = g.medico_que_hizo_id ? nombreDe_(g.medico_que_hizo_id) : '';
   const esTitular = g.medico_titular_id === m.id;
   const esHizo = g.medico_que_hizo_id === m.id;
@@ -228,7 +233,12 @@ function vistaGuardia_(g, m) {
     cerrado: cerrado,
     reclamo: g.observacion === MARCA_RECLAMO,
     mes_facturacion: g.mes_facturacion,
-    cobro: g.fecha_cobro
+    cobro: g.fecha_cobro,
+    libre_ajena: oculto,
+    en_bolsa: esLibre_(g),
+    origen: g.origen || '',
+    puede_liberar: esTitular && esHizo && g.estado === ESTADO.PREVISTA && g.fecha >= hoy_() && !cerrado && !esSoloReemplazo_(m),
+    puede_recuperar: esTitular && esLibre_(g) && g.origen === ORIGEN.LIBERADA
   };
 }
 
@@ -264,6 +274,7 @@ function apiMiMes_(m, a) {
     titulo: capital_(nombreMesAnio_(mes)),
     cerrado: mesCerrado_(mes),
     reemplazos: mesCobro.length,
+    libres: libres_().filter(function (g) { return g.medico_titular_id !== m.id; }).length,
     cobro: fechaCobroCorta_(fechaCobro_(mes)),
     ventana: textoVentana_(mes),
     pendientes: pendientesDe_(m, mes).map(function (g) { return vistaGuardia_(g, m); }),

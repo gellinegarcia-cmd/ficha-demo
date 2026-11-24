@@ -8,6 +8,7 @@ const CONFIG_INICIAL = [
   ['valor_guardia_12', '', 'Opcional: valor de la guardia de 12 h.'],
   ['valor_guardia_24', '', 'Opcional: valor de la guardia de 24 h.'],
   ['url_app', '', 'Dirección de la app. Se completa sola; se puede corregir a mano.'],
+  ['primer_mes', '', 'Primer mes que la app cierra y manda en Excel sola (ej. 2026-12). Los anteriores se hacen a mano.'],
   ['codigo_servicio', '', 'Código para registrarse solo ("No estoy en la lista"). Cambialo cuando quieras; vacío = registro cerrado.']
 ];
 
@@ -127,6 +128,7 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('Fichá')
     .addItem('1. Instalar', 'instalar')
     .addItem('2. Configurar avisos push', 'configurarPush')
+    .addItem('Configurar Gemini', 'configurarGemini')
     .addSeparator()
     .addItem('Ver dirección de la app', 'verDireccionApp')
     .addItem('Probar: mandarme el Excel de este mes', 'probarExcelDelMes')
@@ -142,12 +144,23 @@ function instalar() {
   crearHojas_();
   cargarDatosIniciales_();
   cargarMedicosPrueba_();
+  const cifrados = cifrarPinesVisibles_();
   prepararRegistroPropio_(); // una sola vez: cada médico carga su guardia fija en el registro
   instalarTriggers_();
   registrar_(quien, 'instalar', '');
   SpreadsheetApp.getUi().alert('Listo. Se crearon las hojas y se activaron los automatismos.\n\n' +
-    'Los PIN de los médicos de prueba están en la hoja MEDICOS. Cuando alguien entra por primera vez, ' +
-    'su PIN se guarda cifrado y deja de leerse en la hoja.');
+    (cifrados ? 'Se cifraron ' + cifrados + ' PIN que se veían en la hoja MEDICOS. ' : '') +
+    'Los PIN nunca quedan a la vista: para darle uno nuevo a alguien, usá Vista jefe → Médicos.');
+}
+
+// Los PIN cargados a mano (4 números a la vista) se guardan cifrados (salvo los de los médicos PRUEBA, que son inventados). El médico sigue entrando con el mismo PIN.
+function cifrarPinesVisibles_() {
+  let n = 0;
+  filas_('MEDICOS').forEach(function (m) {
+    if (/^\d{4}$/.test(m.pin) && m.nombre_apellido.indexOf('PRUEBA ') !== 0) { m.pin = hashPin_(m.id, m.pin); guardar_('MEDICOS', m); n++; }
+  });
+  if (n) registrar_('sistema', 'cifrar_pines', n + ' PIN');
+  return n;
 }
 
 function verDireccionApp() {
@@ -192,4 +205,20 @@ function borrarDatosPrueba_() {
   limpiar('GUARDIA_FIJA', ['medico_id']);
   limpiar('MEDICOS', ['id']);
   return Object.keys(ids).length;
+}
+
+// Gemini: por ahora solo se guarda la clave, en las Propiedades del script (GEMINI_KEY). No hay funciones que la usen.
+// La clave nunca va al código, a GitHub, a la app pública, a archivos ni al LOG (en el LOG queda solo que se configuró).
+// Regla para cuando se use: nunca mandar a Gemini datos de salud ni motivos de licencia.
+function configurarGemini() {
+  const quien = soloDueno_();
+  reiniciarEstado_();
+  const ui = SpreadsheetApp.getUi();
+  const r = ui.prompt('Configurar Gemini', 'Pegá acá la clave de Gemini (API key). Se guarda solo en las Propiedades del script.', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const clave = String(r.getResponseText() || '').trim();
+  if (!/^[A-Za-z0-9_-]{30,80}$/.test(clave)) { ui.alert('Eso no parece una clave de Gemini. No se guardó nada.'); return; }
+  setPropiedad_('GEMINI_KEY', clave);
+  registrar_(quien, 'configurar_gemini', 'clave guardada');
+  ui.alert('Listo. La clave de Gemini quedó guardada en las Propiedades del script.');
 }

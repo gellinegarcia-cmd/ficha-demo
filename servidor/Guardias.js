@@ -60,7 +60,9 @@ function crearGuardia_(d) {
     mes_facturacion: mes,
     fecha_cobro: fechaCobro_(mes),
     creado_en: marcaTiempo_(),
-    observacion: d.observacion || (mes !== mesDe_(d.fecha) ? MARCA_RECLAMO : '')
+    observacion: d.observacion || (mes !== mesDe_(d.fecha) ? MARCA_RECLAMO : ''),
+    origen: d.origen || '',
+    libre_desde: d.origen ? hoy_() : ''
   });
 }
 
@@ -543,11 +545,12 @@ function reponerPuesto_(g, titular) {
   });
   if (ocupado || !esFija) return;
   const vac = estaDeVacaciones_(titular.id, g.fecha);
-  crearGuardia_({
+  const nueva = crearGuardia_({
     fecha: g.fecha, turno: g.turno, titular: titular.id, hizo: vac ? '' : titular.id,
     tipo: vac ? TIPO.HOSPITAL : tipoBase_({ medico_titular_id: titular.id, turno: g.turno, fecha: g.fecha }),
-    observacion: vac ? SIN_CUBRIR : ''
+    observacion: vac ? SIN_CUBRIR : '', origen: vac ? ORIGEN.AUSENCIA : ''
   });
+  if (vac) publicarLibres_([nueva]);
 }
 
 // Qué ofrece el menú de cada guardia en Mi mes.
@@ -562,23 +565,32 @@ function accionesDe_(g, m) {
 
 // --- Vacaciones ---
 
+// Ausencia nueva: sus guardias pasan a la bolsa (paga el hospital) y se avisa a todos.
+// Ausencia cancelada o acortada: las guardias futuras vuelven al titular, aunque alguien las haya tomado.
 function recalcularVacaciones_(medicoId) {
+  const hoyStr = hoy_();
+  const nuevas = [];
   filas_('GUARDIAS').filter(function (g) {
     return g.medico_titular_id === medicoId && g.estado === ESTADO.PREVISTA && !mesCerrado_(mesDe_(g.fecha));
   }).forEach(function (g) {
     const enVacaciones = estaDeVacaciones_(medicoId, g.fecha);
     if (enVacaciones && g.medico_que_hizo_id === medicoId) {
-      g.medico_que_hizo_id = '';
+      marcarLibre_(g, ORIGEN.AUSENCIA, TIPO.HOSPITAL);
+      nuevas.push(g);
+    } else if (enVacaciones && !g.medico_que_hizo_id && g.origen === ORIGEN.LIBERADA) {
+      g.origen = ORIGEN.AUSENCIA; // la había liberado y después cargó la ausencia: paga el hospital
       g.tipo = TIPO.HOSPITAL;
-      g.observacion = SIN_CUBRIR;
       guardar_('GUARDIAS', g);
-    } else if (!enVacaciones && g.observacion === SIN_CUBRIR && !g.medico_que_hizo_id) {
+    } else if (!enVacaciones && g.origen === ORIGEN.AUSENCIA && (g.fecha > hoyStr || !g.medico_que_hizo_id)) {
+      devolverAlTitular_(g);
+    } else if (!enVacaciones && !g.origen && g.observacion === SIN_CUBRIR && !g.medico_que_hizo_id) {
       g.medico_que_hizo_id = medicoId;
       g.observacion = '';
       g.tipo = tipoBase_(g);
       guardar_('GUARDIAS', g);
     }
   });
+  publicarLibres_(nuevas);
 }
 
 function validarVacaciones_(datos) {
@@ -632,6 +644,7 @@ function cancelarVacaciones_(m, id) {
 // Crea las guardias PREVISTAS del mes con la guardia fija. No duplica si se corre dos veces.
 function sembrarGuardias_(mes, desdeFecha, soloMedicoId) {
   let creadas = 0;
+  const libresNuevas = [];
   const existentes = {};
   filas_('GUARDIAS').forEach(function (g) {
     if (g.estado !== ESTADO.ANULADA) existentes[g.fecha + '|' + g.turno + '|' + g.medico_titular_id] = true;
@@ -646,15 +659,17 @@ function sembrarGuardias_(mes, desdeFecha, soloMedicoId) {
         if (existentes[fecha + '|' + f.turno + '|' + m.id] || !TURNOS[f.turno]) return;
         const vac = estaDeVacaciones_(m.id, fecha);
         existentes[fecha + '|' + f.turno + '|' + m.id] = true;
-        crearGuardia_({
+        const g = crearGuardia_({
           fecha: fecha, turno: f.turno, titular: m.id, hizo: vac ? '' : m.id,
           tipo: vac || f.tipo === TIPO.HOSPITAL ? TIPO.HOSPITAL : TIPO.CONTRATO,
-          observacion: vac ? SIN_CUBRIR : ''
+          observacion: vac ? SIN_CUBRIR : '', origen: vac ? ORIGEN.AUSENCIA : ''
         });
+        if (vac) libresNuevas.push(g);
         creadas++;
       });
     });
   });
+  publicarLibres_(libresNuevas);
   return creadas;
 }
 

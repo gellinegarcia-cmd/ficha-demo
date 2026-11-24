@@ -2,6 +2,9 @@
 // corresponde. Cada tarea recuerda cuándo se hizo, así no se repite, y si Google no corrió el
 // disparador a horario se hace en la pasada siguiente. Nada de esto requiere la intervención del jefe.
 
+// CONFIG.primer_mes (ej. 2026-12): los meses anteriores no se cierran ni generan Excel solos (se hicieron a mano).
+function mesAutomatico_(m) { const p = cfg_('primer_mes'); return !p || m >= p; }
+
 function yaHecho_(clave, valor) { return propiedad_('job_' + clave) === valor; }
 function marcarHecho_(clave, valor) { setPropiedad_('job_' + clave, valor); }
 
@@ -27,7 +30,7 @@ function correrTareas_() {
       // A las 00:00 del corte el mes ya está cerrado por fecha: acá se hace el pase al mes siguiente.
       [previo, mes].forEach(function (m) {
         const c = filaCierre_(m);
-        if (c && c.estado === 'ABIERTO' && mesCerrado_(m)) cerrarMes_(m);
+        if (c && c.estado === 'ABIERTO' && mesCerrado_(m) && mesAutomatico_(m)) cerrarMes_(m);
       });
     },
     function () {
@@ -37,11 +40,14 @@ function correrTareas_() {
       // El día de corte a las 08:00 llega el Excel, solo. Si falla, se reintenta en la pasada siguiente.
       [previo, mes].forEach(function (m) {
         const c = filaCierre_(m);
-        if (c && c.estado === 'CERRADO' && (fecha > fechaCorte_(m) || hora >= cfg_('hora_excel', '08:00'))) entregarExcelMensual_(m);
+        if (c && c.estado === 'CERRADO' && mesAutomatico_(m) && (fecha > fechaCorte_(m) || hora >= cfg_('hora_excel', '08:00'))) entregarExcelMensual_(m);
       });
     },
     function () {
       if (hora >= cfg_('hora_recordatorio', '08:00') && !yaHecho_('diario', fecha)) { tareaRecordatorioDiario_(fecha); marcarHecho_('diario', fecha); }
+    },
+    function () {
+      if (hora >= cfg_('hora_recordatorio', '08:00') && !yaHecho_('libres', fecha)) { tareaLibresSinTomar_(fecha); marcarHecho_('libres', fecha); }
     },
     function () {
       if (hora >= cfg_('hora_recordatorio', '08:00') && !yaHecho_('conflictos', fecha)) { tareaAvisarConflictos_(fecha); marcarHecho_('conflictos', fecha); }
@@ -51,6 +57,7 @@ function correrTareas_() {
       if (hora < cfg_('hora_recordatorio', '08:00')) return;
       [mes, sumarMeses_(mes, 1)].forEach(function (m) {
         const corte = fechaCorte_(m);
+        if (!mesAutomatico_(m)) return;
         if (fecha === sumarDias_(corte, -7) && !yaHecho_('ventana', m)) { tareaAbrirVentana_(m); marcarHecho_('ventana', m); }
         if (fecha === sumarDias_(corte, -1) && !yaHecho_('aviso', m)) { tareaAvisoPrevio_(m); marcarHecho_('aviso', m); }
       });
@@ -62,7 +69,7 @@ function correrTareas_() {
       }
     },
     function () {
-      filas_('CIERRES').filter(function (c) { return c.regeneracion_pendiente; }).forEach(function (c) {
+      filas_('CIERRES').filter(function (c) { return c.regeneracion_pendiente && mesAutomatico_(c.mes); }).forEach(function (c) {
         enviarCorregido_(c.mes, c.regeneracion_pendiente);
       });
     }
@@ -116,7 +123,7 @@ function tareaRecordatorioDiario_(fecha) {
     if (g.medico_que_hizo_id === g.medico_titular_id) {
       avisar_(m, texto + '.', esSoloReemplazo_(m) ? botonesReemplazoSolo_(g) : botonesConfirmar_(g), { asunto: 'Hoy tenés guardia' });
     } else {
-      const titular = g.medico_titular_id ? ': cubrís a ' + nombreDe_(g.medico_titular_id) : ': puesto vacante';
+      const titular = g.origen === ORIGEN.AUSENCIA ? ': la guardia libre que tomaste' : g.medico_titular_id ? ': cubrís a ' + nombreDe_(g.medico_titular_id) : ': puesto vacante';
       avisar_(m, texto + titular + '. ¿La hacés?', botonesSiNo_(g), { asunto: 'Hoy tenés guardia' });
     }
   });

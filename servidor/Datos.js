@@ -8,7 +8,7 @@ const ESQUEMA = {
   VACACIONES: ['id', 'medico_id', 'desde', 'hasta', 'tipo', 'estado'],
   GUARDIAS: ['id', 'fecha', 'turno', 'horas', 'medico_que_hizo_id', 'medico_titular_id', 'tipo', 'categoria', 'estado',
     'confirmado_por_quien_hizo', 'confirmado_por_titular', 'mes_facturacion', 'fecha_cobro', 'creado_en', 'observacion',
-    'deshacer', 'ultimo_aviso_conflicto', 'control_anticipada'],
+    'deshacer', 'ultimo_aviso_conflicto', 'control_anticipada', 'origen', 'libre_desde', 'aviso_libre'],
   DEUDAS: ['id', 'guardia_id', 'deudor_id', 'acreedor_id', 'fecha_pago_sugerida', 'estado', 'confirmado_por_acreedor', 'deshacer_hasta'],
   FERIADOS: ['fecha', 'nombre', 'tipo', 'estado'],
   CONFIG: ['clave', 'valor', 'para_que_sirve'],
@@ -19,7 +19,7 @@ const ESQUEMA = {
 };
 
 // Columnas técnicas que no aportan a la auditoría.
-const SIN_AUDITORIA = ['deshacer', 'deshacer_hasta', 'ultimo_aviso_conflicto', 'registro'];
+const SIN_AUDITORIA = ['deshacer', 'deshacer_hasta', 'ultimo_aviso_conflicto', 'registro', 'aviso_libre'];
 
 let _cacheTablas = {};
 let _cacheLibro = null;

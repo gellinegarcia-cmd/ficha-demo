@@ -10,7 +10,7 @@
 const FCM_TTL_SEG = 86400;
 const HORAS_FIRMA_ACCION = 72;
 // Acciones que se pueden ejecutar desde la notificación, sin abrir la app.
-const ACCIONES_PUSH = { H: 1, S: 1, N: 1, CS: 1, Y: 1 };
+const ACCIONES_PUSH = { H: 1, S: 1, N: 1, CS: 1, Y: 1, T: 1 };
 
 function cuentaFcm_() {
   const t = propiedad_('FCM_SA');
@@ -136,6 +136,10 @@ function ejecutarAccionPush_(m, accion, id) {
     const g = responderCobertura_(m, id, accion === 'S');
     if (accion === 'N') return 'Anotado. Le avisé a la otra persona para que lo resuelvan entre ustedes.';
     return estaConfirmada_(g) ? 'Confirmada: ' + textoGuardia_(g) + '. ✅' : 'Anotado. Falta que confirme la otra persona.';
+  }
+  if (accion === 'T') {
+    const g = tomarGuardia_(m, id);
+    return 'Es tuya: ' + textoGuardia_(g) + '. Ese día la fichás como cualquier reemplazo. ✅';
   }
   if (accion === 'Y') {
     recibiPago_(m, id);

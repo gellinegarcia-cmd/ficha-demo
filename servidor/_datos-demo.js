@@ -2,6 +2,7 @@
 // JAVIER GARCIA es el administrador ("jefe"). PAULA RIOS todavía no hizo el registro (se ve el flujo completo).
 // SOFIA LUNA ya se registró como SOLO_REEMPLAZO, con un reemplazo fijo semanal.
 // Avisos: casi todos tienen los avisos push activos (simulados); NICOLAS QUIROGA solo mail.
+// Ausencia: NICOLAS QUIROGA, licencia del 21 al 30/11: dos guardias libres, una ya tomada por DIEGO FERREYRA.
 // Corre dentro de servidor.html, después de simulador.js y de los archivos de src/.
 (function (w) {
   'use strict';
@@ -63,6 +64,11 @@
   hagoYo_(med('sofia'), guardia('2026-11-14', 'sofia').id);
   cargarGuardia_(med('sofia'), { fecha: '2026-11-17', turno: '24H', titular_id: M.martin.id, tipo: 'COBERTURA_COMPANERO' });
   responderCobertura_(med('martin'), guardia('2026-11-17', 'martin').id, true);
+  // Bolsa de guardias libres: NICOLAS QUIROGA se ausenta (licencia) del 21 al 30/11. Sus lunes 23 y 30
+  // quedan libres; la del 23 ya la tomó DIEGO FERREYRA. Los compañeros no ven quién se ausenta.
+  agregarVacaciones_(med('nico'), { desde: '2026-11-21', hasta: '2026-11-30', tipo: 'licencia' });
+  reiniciarEstado_();
+  tomarGuardia_(med('diego'), guardia('2026-11-23', 'nico').id);
   refrescarMesesSucios_();
 
   // Lo que se hace en la demo se guarda solo en esta pestaña y se repite al recargar la página.

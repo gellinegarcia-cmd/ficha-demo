@@ -145,6 +145,7 @@ function confirmarRegistro_(m) {
   m.contrato_revisado = true;
   m.registro = '';
   guardar_('MEDICOS', m);
+  sembrarDesdeHoy_(m.id, true); // el mes abierto completo (para cargar lo pasado) y el siguiente
   if (anterior !== m.vinculo) registrar_(m.nombre_apellido, 'cambio_vinculo', anterior + ' → ' + m.vinculo);
   registrar_(m.nombre_apellido, 'registro_completo', resumen);
   return { resumen: resumen };

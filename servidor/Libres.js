@@ -34,7 +34,7 @@ function motivoLibre_(g) {
   const v = filas_('VACACIONES').find(function (x) {
     return x.estado !== 'cancelada' && x.medico_id === g.medico_titular_id && x.desde <= g.fecha && g.fecha <= x.hasta;
   });
-  return v ? v.tipo : 'ausencia';
+  return v ? (NOMBRE_AUSENCIA[v.tipo] || v.tipo) : 'ausencia';
 }
 
 function botonesLibre_(g) {

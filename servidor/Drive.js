@@ -1,53 +1,47 @@
-// Guarda el Excel en Drive. Se usa el permiso drive.file (solo ve lo que crea la app) y no
-// DriveApp, que exigiría acceso a todo el Drive desde una web app pública.
+// Guarda el Excel en Drive con DriveApp (servicio integrado de Apps Script).
+// Antes se usaba la API REST de Drive con el permiso drive.file, pero esa API tiene que estar habilitada en el
+// proyecto interno de Apps Script, al que la dueña no tiene acceso. DriveApp no necesita habilitar nada.
+// Contrapartida: el permiso es "todo el Drive". DriveApp se usa solo en este archivo y solo para crear la carpeta
+// y guardar (o quitar) el Excel; ninguna acción permite leer otros archivos.
 
 const CARPETA_DRIVE = 'Reemplazos Guardias UPA';
-const API_DRIVE = 'https://www.googleapis.com/drive/v3/files';
-const API_DRIVE_SUBIDA = 'https://www.googleapis.com/upload/drive/v3/files';
-
-function llamarDrive_(url, op) {
-  const r = UrlFetchApp.fetch(url, Object.assign({
-    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
-    muteHttpExceptions: true
-  }, op || {}));
-  const codigo = r.getResponseCode();
-  if (codigo >= 300) throw new Error('Drive ' + codigo + ': ' + r.getContentText().slice(0, 200));
-  const texto = r.getContentText();
-  return texto ? JSON.parse(texto) : {};
-}
 
 // La carpeta se crea una vez. Si alguien la manda a la papelera, se crea de nuevo.
 function carpetaDrive_() {
   const guardada = propiedad_('DRIVE_CARPETA');
   if (guardada) {
     try {
-      if (!llamarDrive_(API_DRIVE + '/' + guardada + '?fields=id,trashed').trashed) return guardada;
+      const f = DriveApp.getFolderById(guardada);
+      if (!f.isTrashed()) return f;
     } catch (e) {
       console.error(e);
     }
   }
-  const nueva = llamarDrive_(API_DRIVE + '?fields=id', {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify({ name: CARPETA_DRIVE, mimeType: 'application/vnd.google-apps.folder' })
-  });
-  setPropiedad_('DRIVE_CARPETA', nueva.id);
-  return nueva.id;
+  const nueva = DriveApp.createFolder(CARPETA_DRIVE);
+  setPropiedad_('DRIVE_CARPETA', nueva.getId());
+  return nueva;
 }
 
 function guardarEnDrive_(blob) {
-  const limite = 'guardias_upa_limite';
-  const datos = JSON.stringify({ name: blob.getName(), parents: [carpetaDrive_()] });
-  const cuerpo = '--' + limite + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + datos +
-    '\r\n--' + limite + '\r\nContent-Type: ' + MIME_XLSX + '\r\nContent-Transfer-Encoding: base64\r\n\r\n' +
-    Utilities.base64Encode(blob.getBytes()) + '\r\n--' + limite + '--';
-  return llamarDrive_(API_DRIVE_SUBIDA + '?uploadType=multipart&fields=id,webViewLink', {
-    method: 'post',
-    contentType: 'multipart/related; boundary=' + limite,
-    payload: cuerpo
-  });
+  const archivo = carpetaDrive_().createFile(blob);
+  return { id: archivo.getId(), webViewLink: archivo.getUrl() };
 }
 
 function borrarDeDrive_(id) {
-  llamarDrive_(API_DRIVE + '/' + id, { method: 'delete' });
+  DriveApp.getFileById(id).setTrashed(true);
+}
+
+// Explica en palabras simples un error de Google (permisos, servicios deshabilitados, cuotas), con qué hacer.
+function explicarError_(e) {
+  const m = String((e && e.message) || e || '');
+  if (/has not been used in project|is disabled|accessNotConfigured|SERVICE_DISABLED/i.test(m)) {
+    return 'Un servicio de Google que usa la app está deshabilitado. Avisale a Claude Code con este mensaje: se resuelve en el código, sin que tengas que entrar a Google Cloud.';
+  }
+  if (/authoriz|autoriz|permission|permiso|PERMISSION_DENIED|insufficient/i.test(m)) {
+    return 'Faltan permisos. Abrí la planilla, tocá Fichá → 1. Instalar y aceptá los permisos que pide Google (si dice "Google no verificó esta app": Configuración avanzada → Ir a Fichá).';
+  }
+  if (/quota|cuota|Service invoked too many times|Rate Limit/i.test(m)) {
+    return 'Se alcanzó un límite diario de Google. Se reintenta solo más tarde; si mañana sigue, avisale a Claude Code.';
+  }
+  return 'Error inesperado. Avisale a Claude Code con este mensaje.';
 }

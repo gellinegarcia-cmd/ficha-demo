@@ -9,6 +9,7 @@ const CONFIG_INICIAL = [
   ['valor_guardia_24', '', 'Opcional: valor de la guardia de 24 h.'],
   ['url_app', '', 'Dirección de la app. Se completa sola; se puede corregir a mano.'],
   ['primer_mes', '', 'Primer mes que la app cierra y manda en Excel sola (ej. 2026-12). Los anteriores se hacen a mano.'],
+  ['mes_de_prueba', '', 'Mes de prueba (ej. 2026-11): abierto hasta el último día, sin cierre ni Excel automáticos.'],
   ['codigo_servicio', '', 'Código para registrarse solo ("No estoy en la lista"). Cambialo cuando quieras; vacío = registro cerrado.'],
   ['codigo_jefe', '', 'Código para registrarse como jefe ("Soy el jefe del servicio"). Sirve una sola vez; el jefe lo regenera en Mi servicio.']
 ];
@@ -137,9 +138,31 @@ function onOpen() {
     .addToUi();
 }
 
+// Con el consentimiento por permisos de Google, un menú puede correr sin pedir un permiso nuevo del manifiesto
+// (por ejemplo, Drive). Antes de hacer nada se verifica; si falta alguno, se muestra el botón para autorizar.
+function permisosFaltantes_() {
+  try {
+    const info = ScriptApp.getAuthorizationInfo(ScriptApp.AuthMode.FULL);
+    if (info.getAuthorizationStatus() === ScriptApp.AuthorizationStatus.REQUIRED) return info.getAuthorizationUrl() || 'sin-link';
+  } catch (e) { console.error(e); }
+  return '';
+}
+function mostrarAutorizacion_(url, para) {
+  const enlace = url && url !== 'sin-link'
+    ? '<p><a href="' + url.replace(/"/g, '&quot;') + '" target="_blank" style="display:inline-block;background:#FFD23F;color:#121826;font-weight:700;padding:12px 18px;border-radius:10px;text-decoration:none">Dar los permisos que faltan</a></p>'
+    : '<p>Abrí Extensiones → Apps Script, elegí la función <b>instalar</b> y tocá Ejecutar: Google va a pedir los permisos.</p>';
+  const html = HtmlService.createHtmlOutput('<div style="font:15px/1.45 Arial,sans-serif;color:#121826">' +
+    '<p>Para ' + para + ', Google necesita que autorices permisos nuevos (por ejemplo, guardar el Excel en tu Drive).</p>' + enlace +
+    '<p style="color:#555">Se abre una pestaña de Google: elegí tu cuenta y tocá <b>Permitir</b>. Si dice "Google no verificó esta app": ' +
+    '<b>Configuración avanzada → Ir a Fichá</b>. Después volvé acá y tocá de nuevo <b>Fichá → 1. Instalar</b>.</p></div>').setWidth(460).setHeight(300);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Faltan permisos');
+}
+
 function instalar() {
   const quien = soloDueno_();
   reiniciarEstado_();
+  const falta = permisosFaltantes_();
+  if (falta) { mostrarAutorizacion_(falta, 'terminar de instalar'); return; }
   if (!propiedad_('SHEET_ID')) setPropiedad_('SHEET_ID', SpreadsheetApp.getActiveSpreadsheet().getId());
   if (quien && !propiedad_('DUENO')) setPropiedad_('DUENO', quien);
   const nueva = !propiedad_('SECRETO');
@@ -176,8 +199,17 @@ function probarExcelDelMes() {
   const quien = soloDueno_();
   reiniciarEstado_();
   fijarActor_(quien);
+  const falta = permisosFaltantes_();
+  if (falta) { mostrarAutorizacion_(falta, 'mandarte el Excel'); return; }
   const mes = mesDe_(hoy_());
-  const archivo = entregarExcel_(mes, { prefijoAsunto: 'PRUEBA: ', nombre: nombreArchivoExcel_(mes).replace('.xlsx', '_PRUEBA.xlsx') });
+  let archivo;
+  try {
+    archivo = entregarExcel_(mes, { prefijoAsunto: 'PRUEBA: ', nombre: nombreArchivoExcel_(mes).replace('.xlsx', '_PRUEBA.xlsx') });
+  } catch (e) {
+    avisarErrorServidor_('Probar: mandarme el Excel', e, '');
+    SpreadsheetApp.getUi().alert('No se pudo mandar el Excel.\n\n' + e.message + '\n\nQué hacer: ' + explicarError_(e));
+    return;
+  }
   SpreadsheetApp.getUi().alert('Listo. Se guardó en Drive y se mandó a ' + MAIL_REVISION + '.\n\n' + archivo.webViewLink);
 }
 

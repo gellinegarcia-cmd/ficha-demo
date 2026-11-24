@@ -32,7 +32,7 @@ function correrTareas_() {
       // A las 00:00 del corte el mes ya está cerrado por fecha: acá se hace el pase al mes siguiente.
       [previo, mes].forEach(function (m) {
         const c = filaCierre_(m);
-        if (c && c.estado === 'ABIERTO' && mesCerrado_(m) && mesAutomatico_(m)) cerrarMes_(m);
+        if (c && c.estado === 'ABIERTO' && mesCerrado_(m) && mesAutomatico_(m) && !esMesDePrueba_(m)) cerrarMes_(m);
       });
     },
     function () {
@@ -42,7 +42,7 @@ function correrTareas_() {
       // El día de corte a las 08:00 llega el Excel, solo. Si falla, se reintenta en la pasada siguiente.
       [previo, mes].forEach(function (m) {
         const c = filaCierre_(m);
-        if (c && c.estado === 'CERRADO' && mesAutomatico_(m) && (fecha > fechaCorte_(m) || hora >= cfg_('hora_excel', '08:00'))) entregarExcelMensual_(m);
+        if (c && c.estado === 'CERRADO' && mesAutomatico_(m) && !esMesDePrueba_(m) && (fecha > fechaCorte_(m) || hora >= cfg_('hora_excel', '08:00'))) entregarExcelMensual_(m);
       });
     },
     function () {
@@ -59,7 +59,7 @@ function correrTareas_() {
       if (hora < cfg_('hora_recordatorio', '08:00')) return;
       [mes, sumarMeses_(mes, 1)].forEach(function (m) {
         const corte = fechaCorte_(m);
-        if (!mesAutomatico_(m)) return;
+        if (!mesAutomatico_(m) || esMesDePrueba_(m)) return;
         if (fecha === sumarDias_(corte, -7) && !yaHecho_('ventana', m)) { tareaAbrirVentana_(m); marcarHecho_('ventana', m); }
         if (fecha === sumarDias_(corte, -1) && !yaHecho_('aviso', m)) { tareaAvisoPrevio_(m); marcarHecho_('aviso', m); }
       });
@@ -78,7 +78,7 @@ function correrTareas_() {
   ];
   // Si una tarea falla, las otras igual corren; la fallida se reintenta en 15 minutos.
   tareas.forEach(function (t) {
-    try { t(); } catch (e) { registrar_('sistema', 'error_tarea', e.message); }
+    try { t(); } catch (e) { registrar_('sistema', 'error_tarea', e.message); avisarErrorServidor_('automatismo', e, ''); }
   });
 }
 

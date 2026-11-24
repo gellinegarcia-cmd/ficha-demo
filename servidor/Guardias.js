@@ -14,7 +14,10 @@ function diaCorte_() {
   const n = Number(cfg_('dia_corte', '25'));
   return n >= 1 && n <= 28 ? n : 25;
 }
-function fechaCorte_(mes) { return mes + '-' + ('0' + diaCorte_()).slice(-2); }
+// CONFIG.mes_de_prueba (ej. 2026-11): queda abierto hasta el último día (cierra el 1 del mes siguiente a las 00:00),
+// y no tiene avisos de cierre ni Excel automático (se pide con "Probar: mandarme el Excel").
+function esMesDePrueba_(mes) { return !!mes && String(cfg_('mes_de_prueba')) === mes; }
+function fechaCorte_(mes) { return esMesDePrueba_(mes) ? sumarMeses_(mes, 1) + '-01' : mes + '-' + ('0' + diaCorte_()).slice(-2); }
 
 // Ventana de cierre: los 7 días previos al corte. Se pueden confirmar por adelantado las guardias
 // de ese mes que caen entre el corte y fin de mes.
@@ -116,7 +119,11 @@ function textoSuperposicion_(g, medicoId) {
     : g.origen && g.medico_titular_id !== medicoId ? 'una guardia que tomaste' : 'un reemplazo';
   return 'Ese día ya tenés ' + que + ' de ' + TURNOS[g.turno].nombre + '.';
 }
-const MENSAJE_AUSENTE = 'Ese día estás ausente (vacaciones o licencia): no podés cargar ni tomar guardias.';
+const MENSAJE_AUSENTE = 'Ese día estás ausente: no podés cargar ni tomar guardias.';
+// Tipos de ausencia. Todos con las mismas reglas: sus guardias salen a la bolsa y paga el hospital.
+// Los compañeros nunca ven el tipo ni quién se ausenta; el jefe sí.
+const TIPOS_AUSENCIA = ['vacaciones', 'licencia', 'estres'];
+const NOMBRE_AUSENCIA = { vacaciones: 'vacaciones', licencia: 'licencia', estres: 'estrés' };
 function exigirSinSuperponer_(medicoId, fecha, turno, salvoId) {
   if (estaDeVacaciones_(medicoId, fecha)) throw new ErrorUsuario(MENSAJE_AUSENTE);
   const g = superposicion_(medicoId, fecha, turno, salvoId);
@@ -620,7 +627,7 @@ function validarVacaciones_(datos) {
   if (!esFechaValida_(desde) || !esFechaValida_(hasta)) throw new ErrorUsuario('Elegí las dos fechas.');
   if (desde > hasta) throw new ErrorUsuario('La fecha "desde" tiene que ser anterior a "hasta".');
   if (mesCerrado_(mesDe_(desde))) throw new ErrorUsuario('El mes de ' + nombreMes_(mesDe_(desde)) + ' ya cerró.');
-  return { desde: desde, hasta: hasta, tipo: datos.tipo === 'licencia' ? 'licencia' : 'vacaciones' };
+  return { desde: desde, hasta: hasta, tipo: TIPOS_AUSENCIA.indexOf(datos.tipo) >= 0 ? datos.tipo : 'vacaciones' };
 }
 
 function agregarVacaciones_(m, datos) {
@@ -747,10 +754,11 @@ function guardarFija_(medicoId, filas) {
 // Solo las de ese médico: a los demás no se les puede rehacer una guardia que anularon.
 // Al registrarse, al cambiar la guardia fija o al activarlo: el mes actual (desde hoy) y el siguiente, sin
 // esperar al día 1. No hace falta que el mes esté "abierto": la apertura del día 1 no duplica.
-function sembrarDesdeHoy_(medicoId) {
+function sembrarDesdeHoy_(medicoId, desdeElPrimero) {
   const hoyStr = hoy_();
   const mes = mesDe_(hoyStr);
-  [mes, sumarMeses_(mes, 1)].forEach(function (m) { sembrarGuardias_(m, hoyStr, medicoId); });
+  const desde = desdeElPrimero && !mesCerrado_(mes) && mesAutomatico_(mes) ? mes + '-01' : hoyStr;
+  [mes, sumarMeses_(mes, 1)].forEach(function (m) { sembrarGuardias_(m, desde, medicoId); });
 }
 
 // Primer ingreso: el médico revisa la guardia fija que se le cargó.

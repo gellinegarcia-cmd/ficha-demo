@@ -185,7 +185,7 @@ function reportarError(token, info) {
     const corto = function (v, n) { return String(v === undefined || v === null ? '' : v).slice(0, n); };
     const texto = ['Hubo un error en la app Fichá (te llega como mucho un aviso por hora).', '',
       'Quién: ' + (m ? m.nombre_apellido : 'sin sesión'), 'Pantalla: ' + corto(i.vista, 40), 'Dirección: ' + corto(i.direccion, 120),
-      'Error: ' + corto(i.mensaje, 500), 'Dónde: ' + corto(i.pila, 1500), 'Navegador: ' + corto(i.navegador, 300), 'Cuándo: ' + marcaTiempo_()].join('\n');
+      'Error: ' + corto(i.mensaje, 500), 'Qué hacer: ' + explicarError_(i.mensaje), 'Dónde: ' + corto(i.pila, 1500), 'Navegador: ' + corto(i.navegador, 300), 'Cuándo: ' + marcaTiempo_()].join('\n');
     MailApp.sendEmail({ to: MAIL_REVISION, subject: 'Fichá: error en la app', body: texto, name: 'Fichá' });
     registrar_('sistema', 'error_pantalla', corto(i.mensaje, 120));
     return { ok: true, enviado: true };
@@ -312,6 +312,7 @@ function colorPara_(g, m) {
 }
 
 function textoVentana_(mes) {
+  if (esMesDePrueba_(mes)) return mesCerrado_(mes) ? '' : capital_(nombreMes_(mes)) + ' es mes de prueba: queda abierto hasta el ' + Number(ultimoDia_(mes).slice(8)) + ' para cargar todo.';
   const corte = fechaCorte_(mes);
   const h = hoy_();
   if (mesCerrado_(mes) || h < sumarDias_(corte, -7)) return '';

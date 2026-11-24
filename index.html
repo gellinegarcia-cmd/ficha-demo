@@ -391,6 +391,8 @@ function enFondo(metodo, args, op) {
   const p = colaGuardado.then(() => llamar(metodo, ...args));
   colaGuardado = p.catch(() => {});
   return p.then((d) => {
+    // El mensaje del toque sigue a la vista después de guardar (si no, se borraría al redibujar).
+    if (op.texto && !(aviso && aviso.error)) aviso = { texto: op.texto };
     if (op.listo) op.listo(d);
     repintarFondo();
     return d;
@@ -446,7 +448,7 @@ function turnosLibres(fecha) {
 }
 function porQueNoHayTurno(fecha) {
   const d = diaDelPaquete(fecha);
-  if (d && d.vacaciones) return 'Ese día estás ausente (vacaciones o licencia): no podés cargar ni tomar guardias.';
+  if (d && d.vacaciones) return 'Ese día estás ausente: no podés cargar ni tomar guardias.';
   return (d && d.ocupado_texto) || 'Ese día ya no te queda horario libre.';
 }
 const antesDeLaApp = (fecha) => !!(datos.primer_mes && fecha.slice(0, 7) < datos.primer_mes);
@@ -1164,7 +1166,7 @@ async function verServicio() {
   pintar(bloqueAviso(), el('h2', null, 'Mi servicio'),
     el('h3', null, 'Próximas ausencias (4 semanas)'),
     el('div', { class: 'tarjeta', id: 's-ausencias' }, d.ausencias.length ? d.ausencias.map((a) => el('div', { class: 'fila' },
-      el('b', null, a.nombre), el('span', null, fechaLinda(a.desde) + ' al ' + fechaLinda(a.hasta) + ' · ' + (a.tipo === 'licencia' ? 'Licencia' : 'Vacaciones')))) : vacio('Nadie se ausenta en las próximas 4 semanas.')),
+      el('b', null, a.nombre), el('span', null, fechaLinda(a.desde) + ' al ' + fechaLinda(a.hasta) + ' · ' + ({ licencia: 'Licencia', estres: 'Estrés' }[a.tipo] || 'Vacaciones')))) : vacio('Nadie se ausenta en las próximas 4 semanas.')),
     el('h3', null, 'Guardias libres'),
     el('div', { class: 'tarjeta', id: 's-libres' }, d.libres.length ? d.libres.map((l) => el('div', { class: 'fila' },
       el('span', null, el('b', null, fechaLinda(l.fecha) + ' · ' + l.turno), el('br'), el('span', { class: 'suave' }, l.titular + ' (' + l.motivo + ')' + (l.paga === 'titular' ? ' · paga el titular' : ''))),
@@ -1355,7 +1357,7 @@ async function verVacaciones() {
   const desde = el('input', { id: 'v-desde', type: 'date' });
   const hasta = el('input', { id: 'v-hasta', type: 'date' });
   const tipo = { value: 'vacaciones' };
-  const tipos = () => botonesOpcion([['vacaciones', 'Vacaciones'], ['licencia', 'Licencia']], tipo.value, (v) => { tipo.value = v; cajaTipo.replaceChildren(tipos()); });
+  const tipos = () => botonesOpcion([['vacaciones', 'Vacaciones'], ['licencia', 'Licencia'], ['estres', 'Estrés']], tipo.value, (v) => { tipo.value = v; cajaTipo.replaceChildren(tipos()); });
   const cajaTipo = el('div', { id: 'v-tipo' });
   cajaTipo.append(tipos());
   let editando = null;
@@ -1374,7 +1376,7 @@ async function verVacaciones() {
     el('p', { class: 'suave' }, 'Tus guardias de esas fechas pasan a la bolsa de guardias libres y les llega un aviso a tus compañeros. Ellos no ven quién se ausenta ni por qué.'), form,
     el('h3', null, 'Mis ausencias'),
     el('div', { class: 'tarjeta' }, lista.length ? lista.map((v) => el('div', { class: 'fila' },
-      el('span', null, fechaLinda(v.desde) + ' a ' + fechaLinda(v.hasta) + ' (' + v.tipo + ')'),
+      el('span', null, fechaLinda(v.desde) + ' a ' + fechaLinda(v.hasta) + ' (' + ({ licencia: 'licencia', estres: 'estrés' }[v.tipo] || 'vacaciones') + ')'),
       v.cerrado ? el('span', { class: 'suave' }, 'Mes cerrado') : el('span', null,
         el('button', { class: 'chico', onclick: () => { editando = v.id; desde.value = v.desde; hasta.value = v.hasta; tipo.value = v.tipo; cajaTipo.replaceChildren(tipos()); boton.textContent = 'Guardar cambios'; window.scrollTo(0, 0); } }, 'Cambiar'),
         el('button', { class: 'chico', onclick: () => enFondo('cancelarVacaciones', [v.id], { cambio: (p) => { p.vacaciones = (p.vacaciones || []).filter((x) => x.id !== v.id); },

@@ -435,8 +435,8 @@ function cadaGuardia(p, id, fn) {
 }
 const previsto = {
   confirmar: (g) => (p) => cadaGuardia(p, g.id, (x) => {
-    x.color = g.anticipable ? 'anticipada' : 'confirmada';
-    x.estado = g.anticipable ? 'CONFIRMADA_ANTICIPADA' : 'CONFIRMADA';
+    x.color = g.anticipable && g.futura ? 'anticipada' : 'confirmada';
+    x.estado = g.anticipable && g.futura ? 'CONFIRMADA_ANTICIPADA' : 'CONFIRMADA';
     x.debe_responder = false; x.puede_hago_yo = false;
   }),
   respondido: (g) => (p) => cadaGuardia(p, g.id, (x) => { x.debe_responder = false; }),
@@ -1127,7 +1127,10 @@ function pintarConfirmar(g) {
   }
   // Si le están preguntando algo, solo Sí o No. En un conflicto sí puede cambiar quién la hizo.
   const soloResponder = g.debe_responder && g.estado !== 'EN_CONFLICTO';
-  if (g.puede_hago_yo && !soloResponder) nodos.push(el('button', { class: 'grande', onclick: deFondo('hagoYo', [g.id], g.anticipable ? 'Confirmada por adelantado.' : 'Guardia confirmada.', previsto.confirmar(g)) }, g.anticipable ? 'La hago yo (confirmar por adelantado)' : 'La hago yo'));
+  if (g.puede_hago_yo && !soloResponder && g.anticipable && g.futura) {
+    nodos.push(el('button', { class: 'grande', id: 'btn-adelantado', onclick: deFondo('hagoYo', [g.id], 'Confirmada por adelantado.', previsto.confirmar(g)) }, 'Fichar por adelantado'));
+    nodos.push(el('div', { class: 'regla', id: 'linea-adelantado' }, 'Entra en el Excel de este mes. Si no la hacés, se descuenta el mes que viene.'));
+  } else if (g.puede_hago_yo && !soloResponder) nodos.push(el('button', { class: 'grande', onclick: deFondo('hagoYo', [g.id], 'Guardia confirmada.', previsto.confirmar(g)) }, 'La hago yo'));
   if (g.puede_cubrir && !soloResponder) nodos.push(el('button', { class: 'grande sec', onclick: () => pintarMeCubre(g) }, 'Me cubre…'));
   if (g.puede_liberar && !soloResponder) nodos.push(el('button', { class: 'grande sec', id: 'btn-liberar', onclick: () => pintarLiberar(g) }, 'Liberar (la pongo en la bolsa)'));
   if (g.en_bolsa && g.es_titular) nodos.push(el('div', { class: 'regla' }, 'Esta guardia está en la bolsa de guardias libres: el primero que la tome la hace.'));

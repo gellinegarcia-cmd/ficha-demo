@@ -276,7 +276,7 @@ function vistaGuardia_(g, m) {
     observacion: g.observacion, es_titular: esTitular, es_hizo: esHizo,
     debe_responder: debeResponder && !referencia,
     referencia: referencia,
-    puede_hago_yo: !referencia && esTitular && !anulada && !(confirmada && (cerrado || !esHizo)) && (g.fecha <= hoy_() || esAnticipable_(g.fecha)),
+    puede_hago_yo: !referencia && esTitular && !anulada && !(confirmada && (cerrado || !esHizo)) && (g.fecha <= hoy_() || (esAnticipable_(g.fecha) && g.estado === ESTADO.PREVISTA)),
     anticipable: esAnticipable_(g.fecha),
     control_pendiente: esHizo && controlPendiente_(g),
     control: g.control_anticipada,

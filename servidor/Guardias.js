@@ -264,6 +264,8 @@ function hagoYo_(m, gId) {
   exigirParticipante_(g, m);
   if (g.medico_titular_id && g.medico_titular_id !== m.id) throw new ErrorUsuario('Respondé si cubriste esa guardia con Sí o No.');
   if (g.fecha > hoy_() && !esAnticipable_(g.fecha)) throw new ErrorUsuario('Esa guardia se confirma el día que la hacés. Si te van a cubrir, elegí "Me cubre…".');
+  // Por adelantado solo se fichan las PREVISTAS (del corte al fin de mes, desde 7 días antes del corte).
+  if (g.fecha > hoy_() && g.estado !== ESTADO.PREVISTA) throw new ErrorUsuario('Por adelantado solo se fichan las guardias previstas.');
   exigirNoConfirmadaPorOtro_(g, m);
   const foto = fotoGuardia_(g);
   const anterior = g.medico_que_hizo_id;

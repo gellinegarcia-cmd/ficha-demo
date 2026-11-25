@@ -22,8 +22,15 @@ function fechaCorte_(mes) { return esMesDePrueba_(mes) ? sumarMeses_(mes, 1) + '
 // Ventana de cierre: los 7 días previos al corte. Se pueden confirmar por adelantado las guardias
 // de ese mes que caen entre el corte y fin de mes.
 function esAnticipable_(fecha) {
-  const corte = fechaCorte_(mesDe_(fecha));
+  const mes = mesDe_(fecha);
   const h = hoy_();
+  // Mes de prueba: no cierra el 25, pero las guardias del 25 a fin de mes se fichan igual por adelantado
+  // (desde 7 días antes del 25 y mientras el mes siga abierto).
+  if (esMesDePrueba_(mes)) {
+    const desde = mes + '-' + ('0' + diaCorte_()).slice(-2);
+    return fecha > h && fecha >= desde && h >= sumarDias_(desde, -7) && !mesCerrado_(mes);
+  }
+  const corte = fechaCorte_(mes);
   return fecha > h && fecha >= corte && h < corte && h >= sumarDias_(corte, -7);
 }
 
@@ -403,6 +410,12 @@ function controlPendiente_(g) {
 
 // [Sí] [No, me cubrió alguien] [No se hizo]. Lo que ya salió en el Excel no se toca: si esa fila
 // no corresponde, queda un ajuste para "Para mirar" del Excel siguiente.
+// El ajuste va en "Para mirar" del Excel siguiente al de la guardia (aunque se responda con el mes todavía abierto, como en el mes de prueba).
+function mesAvisoAjuste_(g) {
+  const hoyMes = mesParaFacturar_(hoy_());
+  const siguiente = sumarMeses_(g.mes_facturacion, 1);
+  return siguiente > hoyMes ? siguiente : hoyMes;
+}
 function responderControl_(m, gId, respuesta, d) {
   d = d || {};
   const g = guardiaDe_(gId);
@@ -423,7 +436,7 @@ function responderControl_(m, gId, respuesta, d) {
       : 'La cubrió ' + cubridor.nombre_apellido + ': hay que descontar esa fila.';
     ajusteId = insertar_('AJUSTES', {
       id: siguienteId_('AJUSTES'), guardia_id: g.id, medico_id: m.id, fecha_guardia: g.fecha, mes_origen: g.mes_facturacion,
-      mes_aviso: mesParaFacturar_(hoy_()), motivo: motivo, estado: 'activo', creado_en: marcaTiempo_()
+      mes_aviso: mesAvisoAjuste_(g), motivo: motivo, estado: 'activo', creado_en: marcaTiempo_()
     }).id;
   }
   let nuevaId = '';

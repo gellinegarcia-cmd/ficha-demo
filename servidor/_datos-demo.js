@@ -3,6 +3,7 @@
 // SOFIA LUNA ya se registró como SOLO_REEMPLAZO, con un reemplazo fijo semanal.
 // Avisos: casi todos tienen los avisos push activos (simulados); NICOLAS QUIROGA solo mail.
 // Ausencia: NICOLAS QUIROGA, licencia del 21 al 30/11: dos guardias libres, una ya tomada por DIEGO FERREYRA.
+// Además DIEGO libera su viernes 27/11: hay 2 guardias libres sin tomar (27 y 30/11), marcadas en el calendario.
 // Corre dentro de servidor.html, después de simulador.js y de los archivos de src/.
 (function (w) {
   'use strict';
@@ -71,6 +72,9 @@
   agregarVacaciones_(med('nico'), { desde: '2026-11-21', hasta: '2026-11-30', tipo: 'licencia' });
   reiniciarEstado_();
   tomarGuardia_(med('diego'), guardia('2026-11-23', 'nico').id);
+  // DIEGO FERREYRA libera su viernes 27/11 (paga el hospital): con la del 30/11 quedan 2 libres en el calendario.
+  reiniciarEstado_();
+  liberarGuardia_(med('diego'), guardia('2026-11-27', 'diego').id, 'REEMPLAZO_HOSPITAL');
   refrescarMesesSucios_();
 
   // Lo que se hace en la demo se guarda solo en esta pestaña y se repite al recargar la página.

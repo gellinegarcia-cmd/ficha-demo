@@ -62,6 +62,13 @@
   #guardando::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #FFD23F; margin-right: 7px; vertical-align: 1px; animation: titila 1s infinite alternate; }
   @keyframes titila { from { opacity: 1; } to { opacity: .25; } } .c-confirmada { background: var(--confirmada); } .c-cubierta { background: var(--cubierta); }
   .c-reemplazo { background: var(--reemplazo); } .c-anticipada { background: var(--anticipada); } .c-espera { background: var(--espera); } .c-conflicto { background: var(--conflicto); } .c-vacaciones { background: var(--vacaciones); }
+  /* Guardia libre que puedo tomar: contorno amarillo con un latido suave (cada 1,5 s) */
+  .dia.libre { border-color: #FFD23F; box-shadow: 0 0 0 2px #FFD23F; animation: latido 1.5s ease-in-out infinite; }
+  .c-libre { background: #FFD23F; color: #121826; font-size: 10px; line-height: 1.15; }
+  @keyframes latido { 0%, 100% { box-shadow: 0 0 0 2px #FFD23F; } 50% { box-shadow: 0 0 0 5px rgba(255, 210, 63, .35); } }
+  .banner-libres { display: block; width: 100%; text-align: left; margin-bottom: 10px; padding: 12px 14px; border-radius: 12px; border: 2px solid #FFD23F; background: #FFF6CC; color: #121826; font-size: 16px; font-weight: 700; cursor: pointer; animation: latido 1.5s ease-in-out infinite; }
+  .banner-libres span { display: block; font-size: 13px; font-weight: 400; color: var(--suave); }
+  @media (prefers-reduced-motion: reduce) { .dia.libre, .banner-libres, #guardando::before { animation: none; } }
   .leyenda { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; font-size: 12px; }
   .leyenda span { border-radius: 5px; padding: 2px 6px; }
   .mesnav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; }
@@ -101,7 +108,7 @@
 </head>
 <body><div id="demo-cartel" style="background:#b45309;color:#fff;padding:8px 12px;font:600 14px/1.35 system-ui,Arial,sans-serif;text-align:center">
   DEMO — datos de prueba
-  <div style="font-weight:400;font-size:12px;margin-top:2px">Todos los PIN: 1111 · Código del servicio para registrarse: DEMO24 · Código de jefe: JEFE24 · Jefe: JAVIER GARCIA (pestaña Mi servicio) · NICOLAS QUIROGA: ausente, 2 guardias libres (una ya tomada) · PAULA RIOS: registro desde cero · SOFIA LUNA: solo reemplazos · Los avisos se ven acá arriba (simulados): no usa la planilla real ni manda mensajes</div>
+  <div style="font-weight:400;font-size:12px;margin-top:2px">Todos los PIN: 1111 · Código del servicio para registrarse: DEMO24 · Código de jefe: JEFE24 · Jefe: JAVIER GARCIA (pestaña Mi servicio) · NICOLAS QUIROGA: ausente · 2 guardias libres sin tomar (27 y 30/11), marcadas en amarillo en Mi mes (entrá como MARTIN SOSA) · PAULA RIOS: registro desde cero · SOFIA LUNA: solo reemplazos · Los avisos se ven acá arriba (simulados): no usa la planilla real ni manda mensajes</div>
   <div style="margin-top:6px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
     <button type="button" id="demo-recordatorio" style="font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer">Simular el aviso de las 8:00</button>
     <button type="button" id="demo-mensajes" style="font:inherit;font-size:12px;padding:5px 10px;border-radius:8px;border:1px solid #fff;background:transparent;color:#fff;cursor:pointer">Avisos y mails enviados</button>
@@ -305,8 +312,22 @@ function aplicarPaquete(p) {
   paquete = p;
   datos = p.inicio;
   ultimaSync = Date.now();
+  ponerNumeroEnIcono();
   try { if (paqueteValido(p)) localStorage.setItem(CLAVE_PAQUETE, JSON.stringify({ v: VERSION_PAQUETE, p: p })); } catch (e) { /* sin memoria: igual anda */ }
   return true;
+}
+// Guardias libres que YO puedo tomar: no mías, sin superposición y sin estar ausente (lo decide el servidor en puede_tomar).
+function libresParaMi(mes) {
+  return ((paquete && paquete.libres) || []).filter((l) => l.puede_tomar && !l.mia && (!mes || String(l.fecha).slice(0, 7) === mes));
+}
+const etiquetaLibre = (l) => 'Libre · ' + ({ '24H': '24 h', '12H_DIA': '12 h día', '12H_NOCHE': '12 h noche' }[l.turno_id] || (l.horas + ' h'));
+// Número de guardias libres en el ícono de la app (Badging API), si el celular lo permite.
+function ponerNumeroEnIcono() {
+  try {
+    if (!('setAppBadge' in navigator)) return;
+    const n = token ? libresParaMi().length : 0;
+    (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {});
+  } catch (e) { /* no lo permite */ }
 }
 function olvidarPaquete() { paquete = null; try { localStorage.removeItem(CLAVE_PAQUETE); } catch (e) {} }
 // Tiempos de cada llamada (para la pestaña Mi servicio del jefe).
@@ -383,7 +404,7 @@ function marcarGuardando() { $('guardando').hidden = enCurso === 0; if (!enCurso
 function enFondo(metodo, args, op) {
   op = op || {};
   const foto = paquete ? JSON.stringify(paquete) : null;
-  if (op.cambio && paquete) { try { op.cambio(paquete); } catch (e) { /* solo visual */ } }
+  if (op.cambio && paquete) { try { op.cambio(paquete); ponerNumeroEnIcono(); } catch (e) { /* solo visual */ } }
   if (op.texto) aviso = { texto: op.texto };
   if (op.ir) ir(op.ir);
   enCurso++;
@@ -399,6 +420,8 @@ function enFondo(metodo, args, op) {
   }, (e) => {
     if (foto) aplicarPaquete(JSON.parse(foto));
     aviso = { texto: 'No se guardó: ' + e.message, error: true };
+    if (op.alFallar) { try { op.alFallar(e); } catch (x) { /* solo visual */ } }
+    ponerNumeroEnIcono();
     if (VISTAS_DE_PAQUETE.includes(vista) && !modoJefe) repintarFondo(); else ir('mes');
   }).finally(() => { enCurso--; marcarGuardando(); });
 }
@@ -692,7 +715,7 @@ function pantallaInstalar(listo) {
   pintar(nodos);
 }
 
-function salir() { token = ''; escribir(''); datos = null; olvidarPaquete(); modoJefe = false; pantallaLogin(); }
+function salir() { token = ''; escribir(''); datos = null; olvidarPaquete(); ponerNumeroEnIcono(); modoJefe = false; pantallaLogin(); }
 
 // Si hay un paquete guardado en el celular, la app abre al instante con eso y actualiza de fondo.
 async function arrancar() {
@@ -990,20 +1013,26 @@ async function verMes() {
   const primero = (new Date(d.dias[0].fecha + 'T12:00:00').getDay() + 6) % 7;
   const celdas = DIAS_CAB.map((c) => el('div', { class: 'cab' }, c));
   for (let i = 0; i < primero; i++) celdas.push(el('div'));
+  const libresMes = libresParaMi(mes);
   d.dias.forEach((dia) => {
-    const clase = 'dia' + (dia.no_habil ? ' nh' : '') + (dia.fecha === datos.hoy ? ' hoy' : '') + (dia.vacaciones ? ' vac' : '');
-    const fichas = dia.guardias.map((g) => el('span', { class: 'ficha c-' + g.color }, g.texto));
-    // Cualquier día se puede tocar: con guardia abre esa guardia, y vacío abre la carga.
+    const libresDia = dia.vacaciones ? [] : libresMes.filter((l) => l.fecha === dia.fecha);
+    const clase = 'dia' + (dia.no_habil ? ' nh' : '') + (dia.fecha === datos.hoy ? ' hoy' : '') + (dia.vacaciones ? ' vac' : '') + (libresDia.length ? ' libre' : '');
+    const fichas = dia.guardias.map((g) => el('span', { class: 'ficha c-' + g.color }, g.texto))
+      .concat(libresDia.map((l) => el('span', { class: 'ficha c-libre' }, etiquetaLibre(l))));
+    // Cualquier día se puede tocar: con guardia libre abre su tarjeta, con guardia abre esa guardia, y vacío abre la carga.
     celdas.push(el('button', {
       class: clase,
-      'aria-label': 'Día ' + fechaLinda(dia.fecha) + (dia.guardias.length ? ', con guardia' : ', cargar guardia'),
+      'aria-label': 'Día ' + fechaLinda(dia.fecha) + (libresDia.length ? ', guardia libre para tomar' : dia.guardias.length ? ', con guardia' : ', cargar guardia'),
       'data-fecha': dia.fecha,
-      onclick: () => (dia.guardias.length ? irConfirmar(dia.guardias[0].id) : verCargar(dia.fecha))
+      onclick: () => (libresDia.length ? verLibre(libresDia[0].id) : dia.guardias.length ? irConfirmar(dia.guardias[0].id) : verCargar(dia.fecha))
     }, el('span', { class: 'num' }, Number(dia.fecha.slice(8))), fichas));
   });
-  const leyenda = [['contrato', 'Contrato'], ['prevista', 'Prevista'], ['confirmada', 'Confirmada'], ['anticipada', 'Por adelantado'], ['cubierta', 'Cubierta'], ['reemplazo', 'Reemplazo'], ['vacaciones', 'Ausente'], ['espera', 'Esperando'], ['conflicto', 'Conflicto']];
+  const leyenda = [['libre', 'Libre (la podés tomar)'], ['contrato', 'Contrato'], ['prevista', 'Prevista'], ['confirmada', 'Confirmada'], ['anticipada', 'Por adelantado'], ['cubierta', 'Cubierta'], ['reemplazo', 'Reemplazo'], ['vacaciones', 'Ausente'], ['espera', 'Esperando'], ['conflicto', 'Conflicto']];
   pintar(
     bloqueAviso(),
+    libresMes.length ? el('button', { class: 'banner-libres', id: 'banner-libres', onclick: () => ir('libres') },
+      libresMes.length === 1 ? 'Hay 1 guardia libre este mes' : 'Hay ' + libresMes.length + ' guardias libres este mes',
+      el('span', null, 'Están marcadas en amarillo en el calendario. Tocá para ver la lista.')) : null,
     esSolo() ? el('button', { class: 'grande verde', id: 'btn-cargar-reemplazo', onclick: () => verCargar(datos.hoy) }, '+ Cargar reemplazo') : null,
     el('button', { class: 'grande' + (d.libres ? '' : ' sec'), id: 'btn-libres', onclick: () => ir('libres') }, 'Guardias libres (' + d.libres + ')'),
     datos.recordar_avisos ? el('div', { class: 'regla' }, 'Todavía no activaste los avisos: no te vamos a poder recordar tus guardias. ',
@@ -1124,12 +1153,39 @@ function pintarLiberar(g) {
 }
 
 // --- Guardias libres: las ve todo el servicio. Nunca dicen quién se ausenta. ---
+// Si otro la tomó antes, se avisa y se quita la marca del calendario.
+const tomar = (l) => () => enFondo('tomarLibre', [l.id], { cambio: previsto.tomar(l), ir: 'mes',
+  texto: l.mia ? 'Listo: la guardia volvió a ser tuya.' : 'Es tuya: ' + l.dia + ' ' + fechaLinda(l.fecha) + ', ' + l.turno + '. Ese día la fichás como cualquier reemplazo.',
+  alFallar: (e) => {
+    if (!/ya la tomó|ya no está libre/i.test(e.message)) return;
+    if (paquete) {
+      paquete.libres = (paquete.libres || []).filter((x) => String(x.id) !== String(l.id));
+      Object.values(paquete.meses || {}).forEach((m) => { if (m.libres) m.libres = Math.max(0, m.libres - 1); });
+    }
+    aviso = { texto: 'Ya la tomó un compañero.', error: true };
+  } });
+// Tarjeta de una guardia libre (al tocar el día en el calendario).
+function verLibre(id) {
+  const l = ((paquete && paquete.libres) || []).find((x) => String(x.id) === String(id));
+  if (!l) return ir('mes');
+  vista = 'libre';
+  pintarNav();
+  const mias = (diaDelPaquete(l.fecha) || { guardias: [] }).guardias;
+  pintar(bloqueAviso(),
+    el('div', { class: 'tarjeta', id: 'tarjeta-libre', 'data-libre': l.id },
+      el('div', { class: 'suave' }, 'Guardia libre'),
+      el('div', { class: 'destacado' }, l.dia.charAt(0).toUpperCase() + l.dia.slice(1) + ' ' + fechaLinda(l.fecha)),
+      el('div', null, l.turno + ' · ' + (l.categoria === 'no hábil' ? 'No hábil' : 'Hábil')),
+      el('div', null, el('b', null, l.paga))),
+    el('button', { class: 'grande', id: 'btn-la-tomo', onclick: tomar(l) }, 'La tomo'),
+    el('p', { class: 'suave' }, 'El primero que toca "La tomo" se la queda. Queda en tu mes y ese día la fichás como cualquier reemplazo.'),
+    mias.length ? el('button', { class: 'grande sec', onclick: () => irConfirmar(mias[0].id) }, 'Ver mi guardia de ese día') : null,
+    el('button', { class: 'grande sec', onclick: () => ir('mes') }, 'Volver'));
+}
 async function verLibres() {
   let lista;
   if (!paquete || !paquete.libres) cargando();
   try { lista = await delPaquete('libres', 'libres'); } catch (e) { return mostrarError(e); }
-  const tomar = (l) => () => enFondo('tomarLibre', [l.id], { cambio: previsto.tomar(l), ir: 'mes',
-    texto: l.mia ? 'Listo: la guardia volvió a ser tuya.' : 'Es tuya: ' + l.dia + ' ' + fechaLinda(l.fecha) + ', ' + l.turno + '. Ese día la fichás como cualquier reemplazo.' });
   pintar(bloqueAviso(), el('h2', null, 'Guardias libres (' + lista.length + ')'),
     el('p', { class: 'suave' }, 'El primero que toca "La tomo" se la queda. Queda en tu mes y ese día la fichás como cualquier reemplazo.'),
     lista.length ? lista.map((l) => el('div', { class: 'tarjeta', 'data-libre': l.id },

@@ -132,7 +132,7 @@ const MENSAJE_AUSENTE = 'Ese día estás ausente: no podés cargar ni tomar guar
 const TIPOS_AUSENCIA = ['vacaciones', 'licencia', 'estres'];
 const NOMBRE_AUSENCIA = { vacaciones: 'vacaciones', licencia: 'licencia', estres: 'estrés' };
 function exigirSinSuperponer_(medicoId, fecha, turno, salvoId) {
-  if (estaDeVacaciones_(medicoId, fecha)) throw new ErrorUsuario(MENSAJE_AUSENTE);
+  if (estaDeVacaciones_(medicoId, fecha, turno)) throw new ErrorUsuario(MENSAJE_AUSENTE);
   const g = superposicion_(medicoId, fecha, turno, salvoId);
   if (g) throw new ErrorUsuario(textoSuperposicion_(g, medicoId));
 }
@@ -587,7 +587,7 @@ function reponerPuesto_(g, titular) {
     return f.medico_id === titular.id && f.turno === g.turno && normalizarDia_(f.dia_semana) === DIAS[diaSemana_(g.fecha)];
   });
   if (ocupado || !esFija) return;
-  const vac = estaDeVacaciones_(titular.id, g.fecha);
+  const vac = estaDeVacaciones_(titular.id, g.fecha, g.turno);
   const nueva = crearGuardia_({
     fecha: g.fecha, turno: g.turno, titular: titular.id, hizo: vac ? '' : titular.id,
     tipo: vac ? TIPO.HOSPITAL : tipoBase_({ medico_titular_id: titular.id, turno: g.turno, fecha: g.fecha }),
@@ -616,8 +616,14 @@ function recalcularVacaciones_(medicoId) {
   filas_('GUARDIAS').filter(function (g) {
     return g.medico_titular_id === medicoId && g.estado === ESTADO.PREVISTA && !mesCerrado_(mesDe_(g.fecha));
   }).forEach(function (g) {
-    const enVacaciones = estaDeVacaciones_(medicoId, g.fecha);
-    if (enVacaciones && g.medico_que_hizo_id === medicoId) {
+    const parte = ausenciaDelDia_(medicoId, g.fecha);
+    const enVacaciones = parte === 'TODO' || (!!parte && turnosSePisan_(parte, g.turno));
+    if (enVacaciones && g.medico_que_hizo_id === medicoId && g.turno === '24H' && parte !== 'TODO') {
+      // Ausente un solo turno de su guardia de 24 h: esa mitad sale a la bolsa, la otra la sigue haciendo.
+      const mitad = dividir24_(g, parte);
+      marcarLibre_(mitad, ORIGEN.AUSENCIA, TIPO.HOSPITAL);
+      nuevas.push(mitad);
+    } else if (enVacaciones && g.medico_que_hizo_id === medicoId) {
       marcarLibre_(g, ORIGEN.AUSENCIA, TIPO.HOSPITAL);
       nuevas.push(g);
     } else if (enVacaciones && !g.medico_que_hizo_id && g.origen === ORIGEN.LIBERADA) {
@@ -626,11 +632,13 @@ function recalcularVacaciones_(medicoId) {
       guardar_('GUARDIAS', g);
     } else if (!enVacaciones && g.origen === ORIGEN.AUSENCIA && (g.fecha > hoyStr || !g.medico_que_hizo_id)) {
       devolverAlTitular_(g);
+      unirMitades_(g);
     } else if (!enVacaciones && !g.origen && g.observacion === SIN_CUBRIR && !g.medico_que_hizo_id) {
       g.medico_que_hizo_id = medicoId;
       g.observacion = '';
       g.tipo = tipoBase_(g);
       guardar_('GUARDIAS', g);
+      unirMitades_(g);
     }
   });
   publicarLibres_(nuevas);
@@ -642,12 +650,15 @@ function validarVacaciones_(datos) {
   if (!esFechaValida_(desde) || !esFechaValida_(hasta)) throw new ErrorUsuario('Elegí las dos fechas.');
   if (desde > hasta) throw new ErrorUsuario('La fecha "desde" tiene que ser anterior a "hasta".');
   if (mesCerrado_(mesDe_(desde))) throw new ErrorUsuario('El mes de ' + nombreMes_(mesDe_(desde)) + ' ya cerró.');
-  return { desde: desde, hasta: hasta, tipo: TIPOS_AUSENCIA.indexOf(datos.tipo) >= 0 ? datos.tipo : 'vacaciones' };
+  // Turno: '' = el día entero (24 h). Un solo turno de 12 h, solo para un día.
+  const turno = datos.turno === '12H_DIA' || datos.turno === '12H_NOCHE' ? datos.turno : '';
+  if (turno && desde !== hasta) throw new ErrorUsuario('Para ausentarte un solo turno, elegí un solo día (el mismo en "desde" y "hasta").');
+  return { desde: desde, hasta: hasta, tipo: TIPOS_AUSENCIA.indexOf(datos.tipo) >= 0 ? datos.tipo : 'vacaciones', turno: turno };
 }
 
 function agregarVacaciones_(m, datos) {
   const d = validarVacaciones_(datos);
-  const v = insertar_('VACACIONES', { id: siguienteId_('VACACIONES'), medico_id: m.id, desde: d.desde, hasta: d.hasta, tipo: d.tipo, estado: 'activa' });
+  const v = insertar_('VACACIONES', { id: siguienteId_('VACACIONES'), medico_id: m.id, desde: d.desde, hasta: d.hasta, tipo: d.tipo, estado: 'activa', turno: d.turno });
   recalcularVacaciones_(m.id);
   registrar_(m.nombre_apellido, 'cargo_vacaciones', d.desde + ' a ' + d.hasta);
   return v;
@@ -666,6 +677,7 @@ function editarVacaciones_(m, id, datos) {
   v.desde = d.desde;
   v.hasta = d.hasta;
   v.tipo = d.tipo;
+  v.turno = d.turno;
   guardar_('VACACIONES', v);
   recalcularVacaciones_(v.medico_id);
   registrar_(m.nombre_apellido, 'editar_vacaciones', d.desde + ' a ' + d.hasta);
@@ -689,9 +701,15 @@ function sembrarGuardias_(mes, desdeFecha, soloMedicoId) {
   let creadas = 0;
   const libresNuevas = [];
   const existentes = {};
+  const turnosDe = {};
   filas_('GUARDIAS').forEach(function (g) {
-    if (g.estado !== ESTADO.ANULADA) existentes[g.fecha + '|' + g.turno + '|' + g.medico_titular_id] = true;
+    if (g.estado === ESTADO.ANULADA) return;
+    existentes[g.fecha + '|' + g.turno + '|' + g.medico_titular_id] = true;
+    (turnosDe[g.fecha + '|' + g.medico_titular_id] = turnosDe[g.fecha + '|' + g.medico_titular_id] || []).push(g.turno);
   });
+  const yaTiene = function (fecha, id, turno) {
+    return (turnosDe[fecha + '|' + id] || []).some(function (t) { return turnosSePisan_(t, turno); });
+  };
   const fijas = fijasVigentes_();
   medicos_().filter(function (m) { return !soloMedicoId || m.id === String(soloMedicoId); }).forEach(function (m) {
     const solo = esSoloReemplazo_(m);
@@ -699,15 +717,23 @@ function sembrarGuardias_(mes, desdeFecha, soloMedicoId) {
       const dia = normalizarDia_(f.dia_semana);
       diasDelMes_(mes).forEach(function (fecha) {
         if (DIAS[diaSemana_(fecha)] !== dia || (desdeFecha && fecha < desdeFecha)) return;
-        if (existentes[fecha + '|' + f.turno + '|' + m.id] || !TURNOS[f.turno]) return;
-        const vac = estaDeVacaciones_(m.id, fecha);
+        if (existentes[fecha + '|' + f.turno + '|' + m.id] || !TURNOS[f.turno] || yaTiene(fecha, m.id, f.turno)) return;
+        const parte = ausenciaDelDia_(m.id, fecha);
+        const vac = parte === 'TODO' || parte === f.turno;
+        const mitad = !!parte && parte !== 'TODO' && f.turno === '24H';
         existentes[fecha + '|' + f.turno + '|' + m.id] = true;
+        (turnosDe[fecha + '|' + m.id] = turnosDe[fecha + '|' + m.id] || []).push(f.turno);
         const g = crearGuardia_({
           fecha: fecha, turno: f.turno, titular: m.id, hizo: vac ? '' : m.id,
           tipo: vac || f.tipo === TIPO.HOSPITAL ? TIPO.HOSPITAL : TIPO.CONTRATO,
           observacion: vac ? SIN_CUBRIR : '', origen: vac ? ORIGEN.AUSENCIA : ''
         });
         if (vac) libresNuevas.push(g);
+        if (mitad) {
+          const libre = dividir24_(g, parte);
+          marcarLibre_(libre, ORIGEN.AUSENCIA, TIPO.HOSPITAL);
+          libresNuevas.push(libre);
+        }
         creadas++;
       });
     });

@@ -5,7 +5,7 @@
 const ESQUEMA = {
   MEDICOS: ['id', 'nombre_apellido', 'pin', 'email', 'telegram_chat_id', 'activo', 'es_admin', 'contrato_revisado', 'vinculo', 'pin_propio', 'registro'],
   GUARDIA_FIJA: ['medico_id', 'dia_semana', 'turno', 'tipo', 'vigente'],
-  VACACIONES: ['id', 'medico_id', 'desde', 'hasta', 'tipo', 'estado'],
+  VACACIONES: ['id', 'medico_id', 'desde', 'hasta', 'tipo', 'estado', 'turno'],
   GUARDIAS: ['id', 'fecha', 'turno', 'horas', 'medico_que_hizo_id', 'medico_titular_id', 'tipo', 'categoria', 'estado',
     'confirmado_por_quien_hizo', 'confirmado_por_titular', 'mes_facturacion', 'fecha_cobro', 'creado_en', 'observacion',
     'deshacer', 'ultimo_aviso_conflicto', 'control_anticipada', 'origen', 'libre_desde', 'aviso_libre'],

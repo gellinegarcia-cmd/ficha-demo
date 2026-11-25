@@ -111,7 +111,7 @@ function tablaApi_() {
     vacaciones: { f: apiVacaciones_ },
     libres: { f: apiLibres_ },
     tomarLibre: { e: 1, f: function (m, a) { const g = tomarGuardia_(m, a[0]); return { guardia: vistaGuardia_(g, m), libres: apiLibres_(m) }; } },
-    liberarGuardia: { e: 1, f: function (m, a) { return vistaGuardia_(liberarGuardia_(m, a[0], a[1]), m); } },
+    liberarGuardia: { e: 1, f: function (m, a) { return vistaGuardia_(liberarGuardia_(m, a[0], a[1], a[2]), m); } },
     servicio: { admin: 1, f: apiServicio_ },
     regenerarCodigoJefe: { admin: 1, e: 1, f: function (m) { regenerarCodigoJefe_(m); return apiServicio_(); } },
     agregarVacaciones: { e: 1, f: function (m, a) { agregarVacaciones_(m, a[0] || {}); return apiVacaciones_(m); } },
@@ -327,7 +327,6 @@ function apiMiMes_(m, a) {
   const mesCobro = filas_('GUARDIAS').filter(function (g) {
     return g.tipo === TIPO.HOSPITAL && estaConfirmada_(g) && g.mes_facturacion === mes && g.medico_que_hizo_id === m.id;
   });
-  const vacaciones = filas_('VACACIONES').filter(function (v) { return v.medico_id === m.id && v.estado !== 'cancelada'; });
   return {
     mes: mes,
     titulo: capital_(nombreMesAnio_(mes)),
@@ -341,16 +340,19 @@ function apiMiMes_(m, a) {
       .map(function (g) { return vistaGuardia_(g, m); }),
     dias: diasDelMes_(mes).map(function (f) {
       const delDia = mias.filter(function (g) { return g.fecha === f; });
+      const ausente = ausenciaDelDia_(m.id, f); // 'TODO', un turno de 12 h, o ''
+      const turnoAusente = ausente && ausente !== 'TODO' ? [ausente] : [];
       return {
         fecha: f,
         no_habil: categoriaDe_(f) === 'NO_HABIL',
-        vacaciones: vacaciones.some(function (v) { return v.desde <= f && f <= v.hasta; }),
+        vacaciones: ausente === 'TODO',
+        ausente_turno: turnoAusente[0] || '',
         guardias: delDia.map(function (g) {
           return { id: g.id, color: colorPara_(g, m), texto: (g.tipo === TIPO.CONTRATO && g.medico_titular_id === m.id ? 'C ' : '') + g.horas + ' h' };
         }),
         // Turnos que ese día ya hace él: la pantalla no ofrece cargar algo que se superponga.
-        ocupado: delDia.filter(function (g) { return g.medico_que_hizo_id === m.id; }).map(function (g) { return g.turno; }),
-        ocupado_texto: (function () { const p = delDia.find(function (g) { return g.medico_que_hizo_id === m.id; }); return p ? textoSuperposicion_(p, m.id) : ''; })()
+        ocupado: delDia.filter(function (g) { return g.medico_que_hizo_id === m.id; }).map(function (g) { return g.turno; }).concat(turnoAusente),
+        ocupado_texto: (function () { const p = delDia.find(function (g) { return g.medico_que_hizo_id === m.id; }); return p ? textoSuperposicion_(p, m.id) : turnoAusente.length ? 'Ese turno estás ausente.' : ''; })()
       };
     })
   };
@@ -391,7 +393,7 @@ function apiCandidatos_(m, a) {
 
 function apiVacaciones_(m) {
   return filas_('VACACIONES').filter(function (v) { return v.medico_id === m.id && v.estado !== 'cancelada'; })
-    .map(function (v) { return { id: v.id, desde: v.desde, hasta: v.hasta, tipo: v.tipo, cerrado: mesCerrado_(mesDe_(v.desde)) }; })
+    .map(function (v) { return { id: v.id, desde: v.desde, hasta: v.hasta, tipo: v.tipo, turno: v.turno || '', cerrado: mesCerrado_(mesDe_(v.desde)) }; })
     .sort(function (a, b) { return a.desde < b.desde ? 1 : -1; });
 }
 

@@ -256,7 +256,7 @@ function paraMirar_(mes) {
     const prefijo = fechaCorta_(f.fecha) + ', ' + f.nombre + ': ';
     if (!g.medico_titular_id) lineas.push(prefijo + 'puesto vacante, sin contraparte que lo confirme.');
     if (f.reclamo) lineas.push(prefijo + 'reclamo mes anterior.');
-    if (estaDeVacaciones_(g.medico_que_hizo_id, f.fecha)) lineas.push(prefijo + 'posible error de fecha: ese día figura de vacaciones o licencia.');
+    if (estaDeVacaciones_(g.medico_que_hizo_id, f.fecha, g.turno)) lineas.push(prefijo + 'posible error de fecha: ese día figura de vacaciones o licencia.');
     guardias.forEach(function (o) {
       if (o.id === g.id || o.estado === ESTADO.ANULADA || o.medico_que_hizo_id !== g.medico_que_hizo_id) return;
       if (o.fecha === g.fecha && turnosSePisan_(o.turno, g.turno)) lineas.push(prefijo + 'posible error de fecha: otra guardia superpuesta ese día.');

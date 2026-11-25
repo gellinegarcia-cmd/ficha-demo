@@ -44,6 +44,36 @@ function botonesLibre_(g) {
   ];
 }
 
+// Parte una guardia de 24 h en dos de 12 h: la mitad "parte" sale como guardia aparte (la devuelve) y g queda con la otra.
+// Cada turno es un puesto distinto: en la bolsa, en el Excel (12 h) y en la superposición.
+function dividir24_(g, parte) {
+  const otra = parte === '12H_DIA' ? '12H_NOCHE' : '12H_DIA';
+  g.turno = otra;
+  g.horas = TURNOS[otra].horas;
+  guardar_('GUARDIAS', g);
+  marcarMesSucio_(g.mes_facturacion);
+  return crearGuardia_({ fecha: g.fecha, turno: parte, titular: g.medico_titular_id, hizo: g.medico_que_hizo_id, tipo: g.tipo });
+}
+// Si vuelve a tener las dos mitades de una guardia fija de 24 h, se unen otra vez en una de 24 h.
+function unirMitades_(g) {
+  if (g.turno === '24H' || g.estado !== ESTADO.PREVISTA || g.origen || g.medico_que_hizo_id !== g.medico_titular_id) return;
+  const dia = DIAS[diaSemana_(g.fecha)];
+  const fija24 = fijasVigentes_().some(function (f) { return f.medico_id === g.medico_titular_id && f.turno === '24H' && normalizarDia_(f.dia_semana) === dia; });
+  if (!fija24) return;
+  const otra = g.turno === '12H_DIA' ? '12H_NOCHE' : '12H_DIA';
+  const o = filas_('GUARDIAS').find(function (x) {
+    return x.id !== g.id && x.fecha === g.fecha && x.turno === otra && x.medico_titular_id === g.medico_titular_id &&
+      x.medico_que_hizo_id === g.medico_titular_id && x.estado === ESTADO.PREVISTA && !x.origen && x.tipo === g.tipo;
+  });
+  if (!o) return;
+  o.estado = ESTADO.ANULADA;
+  guardar_('GUARDIAS', o);
+  g.turno = '24H';
+  g.horas = 24;
+  guardar_('GUARDIAS', g);
+  marcarMesSucio_(g.mes_facturacion);
+}
+
 // Deja la guardia en la bolsa (sin avisar: eso lo hace publicarLibres_).
 function marcarLibre_(g, origen, tipo) {
   g.medico_que_hizo_id = '';
@@ -66,7 +96,7 @@ function publicarLibres_(lista, repetir) {
   if (!vigentes.length) return;
   const todos = medicos_().filter(registroCompleto_);
   vigentes.forEach(function (g) {
-    todos.filter(function (m) { return m.id !== g.medico_titular_id && !estaDeVacaciones_(m.id, g.fecha); }).forEach(function (m) {
+    todos.filter(function (m) { return m.id !== g.medico_titular_id && !estaDeVacaciones_(m.id, g.fecha, g.turno); }).forEach(function (m) {
       avisar_(m, (repetir ? 'Sigue libre: ' : 'Guardia libre: ') + textoLibre_(g), botonesLibre_(g), { asunto: 'Guardia libre', sinRegla: true });
     });
   });
@@ -111,7 +141,8 @@ function tomarGuardia_(m, gId) {
 }
 
 // Cambio personal: el titular libera una guardia suya. tipo: REEMPLAZO_HOSPITAL o COBERTURA_COMPANERO (paga él).
-function liberarGuardia_(m, gId, tipo) {
+// parte: en una de 24 h, '12H_DIA' o '12H_NOCHE' libera solo esa mitad (queda como guardia libre aparte).
+function liberarGuardia_(m, gId, tipo, parte) {
   const g = guardiaDe_(gId);
   exigirMesAbierto_(g);
   if (g.medico_titular_id !== m.id || g.medico_que_hizo_id !== m.id) throw new ErrorUsuario('Solo podés liberar una guardia tuya que hacés vos.');
@@ -119,9 +150,10 @@ function liberarGuardia_(m, gId, tipo) {
   if (g.fecha < hoy_()) throw new ErrorUsuario('Esa guardia ya pasó.');
   if (esSoloReemplazo_(m)) throw new ErrorUsuario('Como médico de reemplazos, si no vas a hacer este reemplazo tocá Anular.');
   if (tipo !== TIPO.HOSPITAL && tipo !== TIPO.COMPANERO) throw new ErrorUsuario('Elegí quién paga.');
-  marcarLibre_(g, ORIGEN.LIBERADA, tipo);
-  registrar_(m.nombre_apellido, 'libero_guardia', 'guardia ' + g.id + ' ' + tipo);
-  publicarLibres_([g]);
+  const libre = g.turno === '24H' && (parte === '12H_DIA' || parte === '12H_NOCHE') ? dividir24_(g, parte) : g;
+  marcarLibre_(libre, ORIGEN.LIBERADA, tipo);
+  registrar_(m.nombre_apellido, 'libero_guardia', 'guardia ' + libre.id + ' ' + tipo);
+  publicarLibres_([libre]);
   return g;
 }
 
@@ -170,7 +202,7 @@ function apiLibres_(m) {
   return libres_().map(function (g) {
     const propia = g.medico_titular_id === m.id;
     const pisa = propia ? null : superposicion_(m.id, g.fecha, g.turno);
-    const ausente = !propia && estaDeVacaciones_(m.id, g.fecha);
+    const ausente = !propia && estaDeVacaciones_(m.id, g.fecha, g.turno);
     return {
       turno_id: g.turno, horas: g.horas,
       no_puede: ausente ? 'Ese día estás ausente.' : pisa ? textoSuperposicion_(pisa, m.id) : '',
@@ -196,13 +228,13 @@ function apiServicio_() {
   const ausencias = filas_('VACACIONES').filter(function (v) {
     return v.estado !== 'cancelada' && v.hasta >= hoyStr && v.desde <= hasta;
   }).sort(function (a, b) { return a.desde < b.desde ? -1 : 1; }).map(function (v) {
-    return { nombre: nombreDe_(v.medico_id), desde: v.desde, hasta: v.hasta, tipo: v.tipo };
+    return { nombre: nombreDe_(v.medico_id), desde: v.desde, hasta: v.hasta, tipo: v.tipo, turno: v.turno || '' };
   });
   const libres = filas_('GUARDIAS').filter(function (g) {
     return g.origen && g.estado !== ESTADO.ANULADA && g.fecha >= hoyStr;
   }).sort(function (a, b) { return a.fecha < b.fecha ? -1 : 1; }).map(function (g) {
     const tomada = !!g.medico_que_hizo_id && g.medico_que_hizo_id !== g.medico_titular_id;
-    return { id: g.id, fecha: g.fecha, turno: TURNOS[g.turno].nombre, titular: nombreDe_(g.medico_titular_id), motivo: motivoLibre_(g),
+    return { id: g.id, fecha: g.fecha, turno: TURNOS[g.turno].nombre, turno_id: g.turno, titular: nombreDe_(g.medico_titular_id), motivo: motivoLibre_(g),
       paga: g.tipo === TIPO.HOSPITAL ? 'hospital' : 'titular', tomada: tomada, quien: tomada ? nombreDe_(g.medico_que_hizo_id) : '' };
   });
   const cambios = filas_('LOG').filter(function (l) {
@@ -213,7 +245,23 @@ function apiServicio_() {
     return { cuando: String(l.fecha_hora).slice(0, 16), quien: l.usuario, que: CAMBIOS_SERVICIO[l.accion],
       guardia: g ? fechaCorta_(g.fecha) + ' · ' + TURNOS[g.turno].nombre : (/vacaciones/.test(l.accion) ? String(l.detalle).replace(/\d{4}-\d{2}-\d{2}/g, fechaCorta_).replace(' a ', ' al ') : '') };
   });
+  // Cobertura por día y turno (4 semanas): quién hace cada puesto. Sin nadie = libre (rojo si faltan menos de 7 días).
+  const limite7 = sumarDias_(hoyStr, 7);
+  const porDia = {};
+  filas_('GUARDIAS').filter(function (g) { return g.estado !== ESTADO.ANULADA && g.fecha >= hoyStr && g.fecha <= hasta && TURNOS[g.turno]; }).forEach(function (g) {
+    const libre = !g.medico_que_hizo_id;
+    (porDia[g.fecha] = porDia[g.fecha] || []).push({ turno: g.turno, libre: libre, urgente: libre && g.fecha < limite7,
+      quien: libre ? '' : nombreDe_(g.medico_que_hizo_id),
+      titular: g.medico_titular_id && g.medico_titular_id !== g.medico_que_hizo_id ? nombreDe_(g.medico_titular_id) : '' });
+  });
+  const orden = function (a, b) { return (a.libre ? 1 : 0) - (b.libre ? 1 : 0) || (a.quien < b.quien ? -1 : 1); };
+  const cobertura = Object.keys(porDia).sort().map(function (f) {
+    const l = porDia[f];
+    return { fecha: f, dia: DIAS_CON_TILDE[DIAS[diaSemana_(f)]], no_habil: categoriaDe_(f) === 'NO_HABIL',
+      dia_turno: l.filter(function (x) { return x.turno !== '12H_NOCHE'; }).sort(orden),
+      noche: l.filter(function (x) { return x.turno !== '12H_DIA'; }).sort(orden) };
+  });
   const cj = String(cfg_('codigo_jefe'));
-  return { ausencias: ausencias, libres: libres, cambios: cambios, codigo: cfg_('codigo_servicio'), codigo_jefe: cj,
+  return { cobertura: cobertura, ausencias: ausencias, libres: libres, cambios: cambios, codigo: cfg_('codigo_servicio'), codigo_jefe: cj,
     codigo_jefe_activo: !!cj && propiedad_('codigo_jefe_habilitado') === cj.toUpperCase() };
 }

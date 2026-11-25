@@ -320,7 +320,9 @@ function aplicarPaquete(p) {
 function libresParaMi(mes) {
   return ((paquete && paquete.libres) || []).filter((l) => l.puede_tomar && !l.mia && (!mes || String(l.fecha).slice(0, 7) === mes));
 }
-const etiquetaLibre = (l) => 'Libre · ' + ({ '24H': '24 h', '12H_DIA': '12 h día', '12H_NOCHE': '12 h noche' }[l.turno_id] || (l.horas + ' h'));
+// Cada turno es un puesto distinto: se nombra siempre por turno.
+const TURNO_CORTO = { '24H': '24 h', '12H_DIA': 'Día 12 h', '12H_NOCHE': 'Noche 12 h' };
+const etiquetaLibre = (l) => (TURNO_CORTO[l.turno_id] || (l.horas + ' h')) + ' · Libre';
 // Número de guardias libres en el ícono de la app (Badging API), si el celular lo permite.
 function ponerNumeroEnIcono() {
   try {
@@ -1159,9 +1161,18 @@ function pintarConfirmar(g) {
   pintar(nodos);
 }
 // Cambio personal: la guardia sale a la bolsa y el titular elige quién le paga a quien la tome.
-function pintarLiberar(g) {
-  const liberar = (tipo) => () => enFondo('liberarGuardia', [g.id, tipo], { cambio: previsto.liberar(g), ir: 'mes',
-    texto: 'Listo: tu guardia del ' + fechaLinda(g.fecha) + ' está en la bolsa. Te avisamos cuando alguien la tome.' });
+function pintarLiberar(g, parte) {
+  if (g.turno === '24H' && parte === undefined) {
+    return pintar(bloqueAviso(), resumenGuardia(g), el('h3', null, '¿Qué liberás?'),
+      el('button', { class: 'grande', id: 'liberar-24', onclick: () => pintarLiberar(g, '') }, 'Las 24 h'),
+      el('button', { class: 'grande sec', id: 'liberar-dia', onclick: () => pintarLiberar(g, '12H_DIA') }, 'Solo el día (12 h)'),
+      el('button', { class: 'grande sec', id: 'liberar-noche', onclick: () => pintarLiberar(g, '12H_NOCHE') }, 'Solo la noche (12 h)'),
+      el('p', { class: 'suave' }, 'Cada mitad liberada es una guardia libre aparte. La otra mitad la seguís haciendo vos.'),
+      el('button', { class: 'grande sec', onclick: () => irConfirmar(g.id) }, 'Volver'));
+  }
+  const queParte = parte ? 'el turno ' + (parte === '12H_DIA' ? 'de día' : 'de noche') + ' (12 h) de ' : '';
+  const liberar = (tipo) => () => enFondo('liberarGuardia', [g.id, tipo, parte || ''], { cambio: parte ? null : previsto.liberar(g), ir: 'mes',
+    texto: 'Listo: ' + (queParte || 'tu guardia del ') + (queParte ? 'tu guardia del ' : '') + fechaLinda(g.fecha) + ' está en la bolsa. Te avisamos cuando alguien la tome.' });
   pintar(bloqueAviso(), resumenGuardia(g), el('h3', null, '¿Quién le paga a quien la tome?'),
     el('button', { class: 'grande', id: 'liberar-hospital', onclick: liberar('REEMPLAZO_HOSPITAL') }, 'El hospital'),
     el('button', { class: 'grande sec', id: 'liberar-yo', onclick: liberar('COBERTURA_COMPANERO') }, 'Yo (le pago a quien la tome)'),
@@ -1220,7 +1231,7 @@ function verDia(fecha) {
     nodos.push(el('h3', null, 'Guardias libres de ese día'),
       el('p', { class: 'suave', style: 'margin-top:0' }, 'Son de otros puestos: no te impiden cargar la tuya.'));
     libres.forEach((l) => nodos.push(el('div', { class: 'tarjeta', 'data-libre': l.id, style: 'border:2px solid #FFD23F' },
-      el('div', { class: 'suave' }, 'Guardia libre'),
+      el('div', { class: 'destacado' }, etiquetaLibre(l)),
       el('b', null, l.turno + ' · ' + (l.categoria === 'no hábil' ? 'No hábil' : 'Hábil')),
       el('div', null, l.paga),
       l.puede_tomar ? el('button', { class: 'grande', style: 'margin:10px 0 0', onclick: tomar(l) }, 'La tomo')
@@ -1236,7 +1247,7 @@ async function verLibres() {
   pintar(bloqueAviso(), el('h2', null, 'Guardias libres (' + lista.length + ')'),
     el('p', { class: 'suave' }, 'El primero que toca "La tomo" se la queda. Queda en tu mes y ese día la fichás como cualquier reemplazo.'),
     lista.length ? lista.map((l) => el('div', { class: 'tarjeta', 'data-libre': l.id },
-      el('div', { class: 'destacado' }, l.dia.charAt(0).toUpperCase() + l.dia.slice(1) + ' ' + fechaLinda(l.fecha)),
+      el('div', { class: 'destacado' }, l.dia.charAt(0).toUpperCase() + l.dia.slice(1) + ' ' + fechaLinda(l.fecha) + ' · ' + etiquetaLibre(l)),
       el('div', null, l.turno + ' · ' + l.categoria),
       el('div', { class: 'suave' }, l.paga + (l.mia ? ' · es tuya, la liberaste vos' : '')),
       l.puede_tomar ? el('button', { class: 'grande', style: 'margin:10px 0 0', onclick: tomar(l) }, l.mia ? 'La hago yo' : 'La tomo')
@@ -1266,13 +1277,24 @@ async function verServicio() {
   try { d = await llamar('servicio'); } catch (e) { return mostrarError(e); }
   const vacio = (t) => el('div', { class: 'suave' }, t);
   const herramienta = (v, t) => el('button', { class: 'grande sec', onclick: () => { modoJefe = true; ir(v); } }, t);
+  const ROJO = 'background:#f6c1bd;color:#8a1c16';
+  const puesto = (x) => x.libre
+    ? el('span', { class: 'marca' + (x.urgente ? ' urgente' : ' libre'), style: x.urgente ? ROJO : 'background:#FFD23F' }, (x.turno === '24H' ? '24 h · ' : '') + 'LIBRE' + (x.titular ? ' (de ' + x.titular + ')' : ''))
+    : el('span', { class: 'marca', style: 'background:#e7ecf2' }, x.quien + (x.turno === '24H' ? ' (24 h)' : '') + (x.titular ? ' · cubre a ' + x.titular : ''));
+  const linea = (nombre, lista) => el('div', { style: 'margin-top:4px' }, el('span', { class: 'suave', style: 'display:inline-block;min-width:48px' }, nombre),
+    lista.length ? lista.map(puesto) : el('span', { class: 'suave' }, '—'));
   pintar(bloqueAviso(), el('h2', null, 'Mi servicio'),
+    el('h3', null, 'Cobertura por turno (4 semanas)'),
+    el('p', { class: 'suave', style: 'margin-top:0' }, 'Quién hace cada puesto, de día y de noche. En amarillo, los turnos libres sin tomar; en rojo, si faltan menos de 7 días.'),
+    el('div', { class: 'tarjeta', id: 's-cobertura' }, (d.cobertura || []).length ? d.cobertura.map((c) => el('div', { class: 'fila', style: 'display:block', 'data-fecha': c.fecha },
+      el('b', { style: c.no_habil ? 'color:#b3261e' : '' }, c.dia.charAt(0).toUpperCase() + c.dia.slice(1, 3) + ' ' + fechaLinda(c.fecha).replace(/\/\d{4}$/, '')),
+      linea('Día', c.dia_turno), linea('Noche', c.noche))) : vacio('No hay guardias cargadas en las próximas 4 semanas.')),
     el('h3', null, 'Próximas ausencias (4 semanas)'),
     el('div', { class: 'tarjeta', id: 's-ausencias' }, d.ausencias.length ? d.ausencias.map((a) => el('div', { class: 'fila' },
-      el('b', null, a.nombre), el('span', null, fechaLinda(a.desde) + ' al ' + fechaLinda(a.hasta) + ' · ' + ({ licencia: 'Licencia', estres: 'Estrés' }[a.tipo] || 'Vacaciones')))) : vacio('Nadie se ausenta en las próximas 4 semanas.')),
+      el('b', null, a.nombre), el('span', null, (a.desde === a.hasta ? fechaLinda(a.desde) : fechaLinda(a.desde) + ' al ' + fechaLinda(a.hasta)) + (a.turno ? ' · ' + TURNO_CORTO[a.turno] : '') + ' · ' + ({ licencia: 'Licencia', estres: 'Estrés' }[a.tipo] || 'Vacaciones')))) : vacio('Nadie se ausenta en las próximas 4 semanas.')),
     el('h3', null, 'Guardias libres'),
     el('div', { class: 'tarjeta', id: 's-libres' }, d.libres.length ? d.libres.map((l) => el('div', { class: 'fila' },
-      el('span', null, el('b', null, fechaLinda(l.fecha) + ' · ' + l.turno), el('br'), el('span', { class: 'suave' }, l.titular + ' (' + l.motivo + ')' + (l.paga === 'titular' ? ' · paga el titular' : ''))),
+      el('span', null, el('b', null, fechaLinda(l.fecha) + ' · ' + l.turno + (l.turno_id ? ' (' + TURNO_CORTO[l.turno_id] + ')' : '')), el('br'), el('span', { class: 'suave' }, l.titular + ' (' + l.motivo + ')' + (l.paga === 'titular' ? ' · paga el titular' : ''))),
       l.tomada ? el('span', { class: 'marca', style: 'background:#bfe6c9' }, 'Tomada: ' + l.quien) : el('span', { class: 'marca' }, 'Sin tomar'))) : vacio('No hay guardias libres.')),
     el('h3', null, 'Cambios recientes (7 días)'),
     el('div', { class: 'tarjeta', id: 's-cambios' }, d.cambios.length ? d.cambios.map((c) => el('div', { class: 'fila' },
@@ -1463,25 +1485,32 @@ async function verVacaciones() {
   const tipos = () => botonesOpcion([['vacaciones', 'Vacaciones'], ['licencia', 'Licencia'], ['estres', 'Estrés']], tipo.value, (v) => { tipo.value = v; cajaTipo.replaceChildren(tipos()); });
   const cajaTipo = el('div', { id: 'v-tipo' });
   cajaTipo.append(tipos());
+  const parte = { value: '' };
+  const partes = () => botonesOpcion([['', '24 h (todo el día)'], ['12H_DIA', 'Día 12 h'], ['12H_NOCHE', 'Noche 12 h']], parte.value, (v) => { parte.value = v; cajaParte.replaceChildren(partes()); });
+  const cajaParte = el('div', { id: 'v-turno' });
+  cajaParte.append(partes());
   let editando = null;
   const boton = el('button', { class: 'grande', type: 'submit' }, 'Guardar');
   const form = el('form', { class: 'tarjeta', onsubmit: (ev) => {
     ev.preventDefault();
     if (!desde.value || !hasta.value) { aviso = { texto: 'Elegí las dos fechas.', error: true }; return verVacaciones(); }
     if (desde.value > hasta.value) { aviso = { texto: 'La fecha "desde" tiene que ser anterior a "hasta".', error: true }; return verVacaciones(); }
-    const datosV = { desde: desde.value, hasta: hasta.value, tipo: tipo.value };
-    const nueva = { id: 'nueva', desde: desde.value, hasta: hasta.value, tipo: tipo.value, cerrado: false };
+    if (parte.value && desde.value !== hasta.value) { aviso = { texto: 'Para ausentarte un solo turno, elegí un solo día (el mismo en "desde" y "hasta").', error: true }; return verVacaciones(); }
+    const datosV = { desde: desde.value, hasta: hasta.value, tipo: tipo.value, turno: parte.value };
+    const nueva = { id: 'nueva', desde: desde.value, hasta: hasta.value, tipo: tipo.value, turno: parte.value, cerrado: false };
     enFondo(editando ? 'editarVacaciones' : 'agregarVacaciones', editando ? [editando, datosV] : [datosV], {
       cambio: (p) => { p.vacaciones = editando ? (p.vacaciones || []).map((v) => (v.id === editando ? Object.assign({}, v, nueva, { id: v.id }) : v)) : [nueva].concat(p.vacaciones || []); },
       texto: 'Guardado. Tus guardias de esas fechas quedaron en la bolsa de guardias libres (paga el hospital).', ir: 'vacaciones' });
-  } }, el('label', { style: 'margin-top:0' }, 'Tipo'), cajaTipo, el('label', { htmlFor: 'v-desde' }, 'Desde'), desde, el('label', { htmlFor: 'v-hasta' }, 'Hasta'), hasta, el('br'), boton);
+  } }, el('label', { style: 'margin-top:0' }, 'Tipo'), cajaTipo, el('label', { htmlFor: 'v-desde' }, 'Desde'), desde, el('label', { htmlFor: 'v-hasta' }, 'Hasta'), hasta,
+    el('label', null, 'Turno'), cajaParte,
+    el('div', { class: 'suave', style: 'font-size:13px' }, 'Para un solo turno, elegí el mismo día en "desde" y "hasta". Si son varios días, quedan libres todos tus turnos.'), el('br'), boton);
   pintar(bloqueAviso(), el('h2', null, 'Me ausento'),
     el('p', { class: 'suave' }, 'Tus guardias de esas fechas pasan a la bolsa de guardias libres y les llega un aviso a tus compañeros. Ellos no ven quién se ausenta ni por qué.'), form,
     el('h3', null, 'Mis ausencias'),
     el('div', { class: 'tarjeta' }, lista.length ? lista.map((v) => el('div', { class: 'fila' },
-      el('span', null, fechaLinda(v.desde) + ' a ' + fechaLinda(v.hasta) + ' (' + ({ licencia: 'licencia', estres: 'estrés' }[v.tipo] || 'vacaciones') + ')'),
+      el('span', null, (v.desde === v.hasta ? fechaLinda(v.desde) : fechaLinda(v.desde) + ' a ' + fechaLinda(v.hasta)) + (v.turno ? ' · ' + TURNO_CORTO[v.turno] : '') + ' (' + ({ licencia: 'licencia', estres: 'estrés' }[v.tipo] || 'vacaciones') + ')'),
       v.cerrado ? el('span', { class: 'suave' }, 'Mes cerrado') : el('span', null,
-        el('button', { class: 'chico', onclick: () => { editando = v.id; desde.value = v.desde; hasta.value = v.hasta; tipo.value = v.tipo; cajaTipo.replaceChildren(tipos()); boton.textContent = 'Guardar cambios'; window.scrollTo(0, 0); } }, 'Cambiar'),
+        el('button', { class: 'chico', onclick: () => { editando = v.id; desde.value = v.desde; hasta.value = v.hasta; tipo.value = v.tipo; cajaTipo.replaceChildren(tipos()); parte.value = v.turno || ''; cajaParte.replaceChildren(partes()); boton.textContent = 'Guardar cambios'; window.scrollTo(0, 0); } }, 'Cambiar'),
         el('button', { class: 'chico', onclick: () => enFondo('cancelarVacaciones', [v.id], { cambio: (p) => { p.vacaciones = (p.vacaciones || []).filter((x) => x.id !== v.id); },
           texto: 'Ausencia cancelada. Tus guardias volvieron a ser tuyas.', ir: 'vacaciones' }) }, 'Cancelar')))) : el('span', { class: 'suave' }, 'No cargaste ausencias.')));
 }

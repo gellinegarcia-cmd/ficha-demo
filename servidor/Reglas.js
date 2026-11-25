@@ -25,10 +25,22 @@ function fechaCobro_(mesTrabajado) {
 // Supuesto: día 08-20, noche 20-08, 24 h 08-08. Por eso solo se pisan guardias de la misma fecha.
 function turnosSePisan_(a, b) { return a === b || a === '24H' || b === '24H'; }
 
-function estaDeVacaciones_(medicoId, fecha) {
-  return filas_('VACACIONES').some(function (v) {
-    return v.estado !== 'cancelada' && v.medico_id === String(medicoId) && v.desde <= fecha && fecha <= v.hasta;
+// Ausencia de ese día: 'TODO' (el día entero), '12H_DIA' o '12H_NOCHE' (un solo turno), o '' si no está ausente.
+function ausenciaDelDia_(medicoId, fecha) {
+  let parte = '';
+  filas_('VACACIONES').forEach(function (v) {
+    if (v.estado === 'cancelada' || v.medico_id !== String(medicoId) || !(v.desde <= fecha && fecha <= v.hasta)) return;
+    const t = v.turno === '12H_DIA' || v.turno === '12H_NOCHE' ? v.turno : 'TODO';
+    parte = parte === 'TODO' || t === 'TODO' || (parte && parte !== t) ? 'TODO' : t;
   });
+  return parte;
+}
+// Sin turno: si ese día tiene alguna ausencia. Con turno: si ese turno se pisa con la ausencia.
+function estaDeVacaciones_(medicoId, fecha, turno) {
+  const parte = ausenciaDelDia_(medicoId, fecha);
+  if (!parte) return false;
+  if (!turno || parte === 'TODO') return true;
+  return turnosSePisan_(parte, turno);
 }
 
 // Vacaciones o licencia -> paga el hospital. Cambio personal -> paga el compañero. Sin titular -> hospital.

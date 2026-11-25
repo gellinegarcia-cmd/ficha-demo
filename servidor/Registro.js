@@ -85,7 +85,9 @@ function filasDelBorrador_(b) {
   if (b.vinculo === VINCULO.SOLO) {
     return b.tiene_fijos ? b.reemplazos.map(function (f) { return { dia_semana: f.dia_semana, turno: f.turno, tipo: TIPO.HOSPITAL }; }) : [];
   }
-  return b.contrato.map(function (f) { return { dia_semana: f.dia_semana, turno: f.turno, tipo: TIPO.CONTRATO }; });
+  // Con contrato también puede tener reemplazos fijos semanales (ej.: contrato jueves + reemplazo fijo lunes).
+  return b.contrato.map(function (f) { return { dia_semana: f.dia_semana, turno: f.turno, tipo: TIPO.CONTRATO }; })
+    .concat(b.tiene_fijos ? b.reemplazos.map(function (f) { return { dia_semana: f.dia_semana, turno: f.turno, tipo: TIPO.HOSPITAL }; }) : []);
 }
 
 function textoFilas_(filas) {
@@ -103,7 +105,10 @@ function resumenRegistro_(m, b) {
   const filas = filasDelBorrador_(b);
   let t = 'Sos ' + m.nombre_apellido + ', ';
   if (b.vinculo === VINCULO.SOLO) t += filas.length ? 'solo reemplazos, fijos: ' + textoFilas_(filas) + '.' : 'solo reemplazos (variables).';
-  else t += 'contrato: ' + textoFilas_(filas) + '.';
+  else {
+    const fijos = filas.filter(function (f) { return f.tipo === TIPO.HOSPITAL; });
+    t += 'contrato: ' + textoFilas_(filas.filter(function (f) { return f.tipo === TIPO.CONTRATO; })) + (fijos.length ? '; reemplazos fijos: ' + textoFilas_(fijos) : '') + '.';
+  }
   if (b.tiene_vacaciones && b.vacaciones) t += ' Vacaciones: del ' + fechaCorta_(b.vacaciones.desde) + ' al ' + fechaCorta_(b.vacaciones.hasta) + '.';
   return t + ' ' + textoAvisos_(m, b.email || m.email);
 }
@@ -112,7 +117,7 @@ function validarBorrador_(b) {
   if (!b.vinculo) throw new ErrorUsuario('Elegí cómo trabajás en el servicio.');
   const filas = filasDelBorrador_(b);
   if (b.vinculo === VINCULO.CONTRATO) {
-    const horas = filas.reduce(function (s, f) { return s + TURNOS[f.turno].horas; }, 0);
+    const horas = filas.filter(function (f) { return f.tipo === TIPO.CONTRATO; }).reduce(function (s, f) { return s + TURNOS[f.turno].horas; }, 0);
     if (horas !== 24) throw new ErrorUsuario('Elegí tu guardia de contrato: 24 h, o 12 h + 12 h.');
   } else if (b.tiene_fijos === null) {
     throw new ErrorUsuario('Contanos si tenés reemplazos fijos.');

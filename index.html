@@ -853,8 +853,20 @@ function regGuardia() {
         el('label', null, 'Turno'), botonesOpcion([['12H_DIA', 'Día'], ['12H_NOCHE', 'Noche']], c.turno, (t) => { c.turno = t; regGuardia(); })));
     });
   }
-  const completo = (b.modo === '24' && b.contrato[0] && b.contrato[0].dia_semana) ||
-    (b.modo === '12' && b.contrato.length >= 2 && b.contrato.slice(0, 2).every((c) => c.dia_semana && c.turno));
+  // Además del contrato, reemplazos fijos semanales (opcional): se generan solos en el calendario.
+  const fijos = el('div', { class: 'bloque', id: 'r-fijos' }, el('b', null, 'Reemplazos fijos (opcional)'),
+    el('p', { class: 'suave', style: 'margin:4px 0 8px' }, 'Si además del contrato hacés reemplazos todas las semanas (ej.: contrato jueves + reemplazo fijo lunes), cargalos acá y se generan solos en tu calendario.'));
+  if (b.tiene_fijos === true && b.reemplazos.length) {
+    b.reemplazos.forEach((r, i) => fijos.append(el('div', { class: 'tarjeta' }, el('b', null, 'Reemplazo fijo ' + (i + 1)),
+      el('label', null, 'Día'), botonesDias(r.dia_semana, (d) => { r.dia_semana = d; regGuardia(); }),
+      el('label', null, 'Turno'), botonesOpcion([['24H', '24 h'], ['12H_DIA', '12 h día'], ['12H_NOCHE', '12 h noche']], r.turno, (t) => { r.turno = t; regGuardia(); }),
+      el('div', { style: 'margin-top:8px' }, el('button', { class: 'chico', onclick: () => { b.reemplazos.splice(i, 1); if (!b.reemplazos.length) b.tiene_fijos = false; regGuardia(); } }, 'Quitar')))));
+  }
+  fijos.append(el('button', { class: 'chico', id: 'r-agregar-fijo', onclick: () => { b.tiene_fijos = true; b.reemplazos.push({ dia_semana: '', turno: '24H' }); regGuardia(); } }, '+ Agregar reemplazo fijo'));
+  nodos.push(fijos);
+  const fijosOk = b.tiene_fijos !== true || b.reemplazos.every((r) => r.dia_semana);
+  const completo = fijosOk && ((b.modo === '24' && b.contrato[0] && b.contrato[0].dia_semana) ||
+    (b.modo === '12' && b.contrato.length >= 2 && b.contrato.slice(0, 2).every((c) => c.dia_semana && c.turno)));
   nodos.push(el('br'), el('button', { class: 'grande', id: 'r-siguiente', disabled: !completo, onclick: regAccion(() => avanzar('3v')) }, 'Siguiente'), atras);
   pintar(nodos);
 }
@@ -1019,12 +1031,14 @@ async function verMes() {
     const clase = 'dia' + (dia.no_habil ? ' nh' : '') + (dia.fecha === datos.hoy ? ' hoy' : '') + (dia.vacaciones ? ' vac' : '') + (libresDia.length ? ' libre' : '');
     const fichas = dia.guardias.map((g) => el('span', { class: 'ficha c-' + g.color }, g.texto))
       .concat(libresDia.map((l) => el('span', { class: 'ficha c-libre' }, etiquetaLibre(l))));
-    // Cualquier día se puede tocar: con guardia libre abre su tarjeta, con guardia abre esa guardia, y vacío abre la carga.
+    // Cualquier día se puede tocar. Si ese día hay guardias libres (de otros puestos) o varias mías, se ve todo junto
+    // en la tarjeta del día; con una sola guardia mía abre esa guardia, y vacío abre la carga.
+    const hayLibres = libresDelDia(dia.fecha).length > 0;
     celdas.push(el('button', {
       class: clase,
       'aria-label': 'Día ' + fechaLinda(dia.fecha) + (libresDia.length ? ', guardia libre para tomar' : dia.guardias.length ? ', con guardia' : ', cargar guardia'),
       'data-fecha': dia.fecha,
-      onclick: () => (libresDia.length ? verLibre(libresDia[0].id) : dia.guardias.length ? irConfirmar(dia.guardias[0].id) : verCargar(dia.fecha))
+      onclick: () => (hayLibres || dia.guardias.length > 1 ? verDia(dia.fecha) : dia.guardias.length ? irConfirmar(dia.guardias[0].id) : verCargar(dia.fecha))
     }, el('span', { class: 'num' }, Number(dia.fecha.slice(8))), fichas));
   });
   const leyenda = [['libre', 'Libre (la podés tomar)'], ['contrato', 'Contrato'], ['prevista', 'Prevista'], ['confirmada', 'Confirmada'], ['anticipada', 'Por adelantado'], ['cubierta', 'Cubierta'], ['reemplazo', 'Reemplazo'], ['vacaciones', 'Ausente'], ['espera', 'Esperando'], ['conflicto', 'Conflicto']];
@@ -1167,23 +1181,53 @@ const tomar = (l) => () => enFondo('tomarLibre', [l.id], { cambio: previsto.toma
     }
     aviso = { texto: 'Ya la tomó un compañero.', error: true };
   } });
-// Tarjeta de una guardia libre (al tocar el día en el calendario).
-function verLibre(id) {
-  const l = ((paquete && paquete.libres) || []).find((x) => String(x.id) === String(id));
-  if (!l) return ir('mes');
-  vista = 'libre';
+// Guardias libres de un día que no son mías (las que puedo tomar y las que no, con el motivo).
+function libresDelDia(fecha) {
+  return ((paquete && paquete.libres) || []).filter((l) => l.fecha === fecha && !l.mia && (l.puede_tomar || l.no_puede));
+}
+const DIA_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+// Tarjeta del día: cada guardia es un puesto distinto. Mis guardias (con Fichar y su menú), aparte las guardias
+// libres de otros puestos (con "La tomo"), y siempre "+ Cargar guardia" si me queda horario.
+function verDia(fecha) {
+  vista = 'dia';
   pintarNav();
-  const mias = (diaDelPaquete(l.fecha) || { guardias: [] }).guardias;
-  pintar(bloqueAviso(),
-    el('div', { class: 'tarjeta', id: 'tarjeta-libre', 'data-libre': l.id },
+  const mes = paquete && paquete.meses && paquete.meses[fecha.slice(0, 7)];
+  const mias = ((mes && mes.guardias) || []).filter((g) => g.fecha === fecha);
+  const libres = libresDelDia(fecha);
+  const fichar = (g) => {
+    if (!g.puede_hago_yo || g.debe_responder || g.control_pendiente) return null;
+    const adelantada = g.anticipable && g.futura;
+    return [el('button', { class: 'grande', 'data-fichar': g.id, style: 'margin:10px 0 6px',
+      onclick: () => enFondo('hagoYo', [g.id], { cambio: previsto.confirmar(g), texto: adelantada ? 'Confirmada por adelantado.' : 'Guardia confirmada.', ir: 'mes' }) },
+      adelantada ? 'Fichar por adelantado' : 'Fichar'),
+      adelantada ? el('div', { class: 'regla' }, 'Entra en el Excel de este mes. Si no la hacés, se descuenta el mes que viene.') : null];
+  };
+  const nodos = [bloqueAviso(), el('h2', null, DIA_SEMANA[new Date(fecha + 'T12:00:00').getDay()] + ' ' + fechaLinda(fecha))];
+  nodos.push(el('h3', null, 'Mis guardias'));
+  if (mias.length) {
+    mias.forEach((g) => nodos.push(el('div', { class: 'tarjeta', 'data-guardia': g.id },
+      el('b', null, g.turno_nombre + ' · ' + (g.tipo === 'CONTRATO' ? 'Contrato' : 'Reemplazo')),
+      el('div', { class: 'suave' }, [ESTADOS[g.estado] || g.estado, textoCobertura(g), g.tipo !== 'CONTRATO' ? TIPOS[g.tipo] : ''].filter(Boolean).join(' · ')),
+      fichar(g),
+      el('button', { class: 'chico', style: 'margin-top:8px', onclick: () => irConfirmar(g.id) }, 'Abrir (más opciones)'))));
+  } else nodos.push(el('div', { class: 'tarjeta suave' }, 'Ese día no tenés guardias cargadas.'));
+  const cerrado = mes && mes.cerrado;
+  if (!antesDeLaApp(fecha) && turnosLibres(fecha).length) {
+    nodos.push(el('button', { class: 'grande sec', id: 'btn-dia-cargar', onclick: () => verCargar(fecha) }, '+ Cargar guardia'));
+    if (cerrado) nodos.push(el('div', { class: 'suave' }, 'El mes ya cerró: lo que cargues entra como "reclamo mes anterior".'));
+  } else if (!antesDeLaApp(fecha)) nodos.push(el('div', { class: 'regla' }, porQueNoHayTurno(fecha)));
+  if (libres.length) {
+    nodos.push(el('h3', null, 'Guardias libres de ese día'),
+      el('p', { class: 'suave', style: 'margin-top:0' }, 'Son de otros puestos: no te impiden cargar la tuya.'));
+    libres.forEach((l) => nodos.push(el('div', { class: 'tarjeta', 'data-libre': l.id, style: 'border:2px solid #FFD23F' },
       el('div', { class: 'suave' }, 'Guardia libre'),
-      el('div', { class: 'destacado' }, l.dia.charAt(0).toUpperCase() + l.dia.slice(1) + ' ' + fechaLinda(l.fecha)),
-      el('div', null, l.turno + ' · ' + (l.categoria === 'no hábil' ? 'No hábil' : 'Hábil')),
-      el('div', null, el('b', null, l.paga))),
-    el('button', { class: 'grande', id: 'btn-la-tomo', onclick: tomar(l) }, 'La tomo'),
-    el('p', { class: 'suave' }, 'El primero que toca "La tomo" se la queda. Queda en tu mes y ese día la fichás como cualquier reemplazo.'),
-    mias.length ? el('button', { class: 'grande sec', onclick: () => irConfirmar(mias[0].id) }, 'Ver mi guardia de ese día') : null,
-    el('button', { class: 'grande sec', onclick: () => ir('mes') }, 'Volver'));
+      el('b', null, l.turno + ' · ' + (l.categoria === 'no hábil' ? 'No hábil' : 'Hábil')),
+      el('div', null, l.paga),
+      l.puede_tomar ? el('button', { class: 'grande', style: 'margin:10px 0 0', onclick: tomar(l) }, 'La tomo')
+        : el('div', { class: 'regla', style: 'margin:10px 0 0' }, 'No podés tomarla: ' + l.no_puede.replace(/^Ese día /, '').replace(/\.$/, '') + ' ese día.'))));
+  }
+  nodos.push(el('button', { class: 'grande sec', onclick: () => ir('mes') }, 'Volver'));
+  pintar(nodos);
 }
 async function verLibres() {
   let lista;
@@ -1478,7 +1522,8 @@ function editorFija(filas, dias, turnos, soloReemplazo) {
   };
   pintarFilas();
   return el('div', null, contenedor,
-    el('button', { class: 'chico', onclick: () => { filas.push({ dia_semana: 'lunes', turno: '24H', tipo: soloReemplazo ? 'REEMPLAZO_HOSPITAL' : 'CONTRATO' }); pintarFilas(); } }, soloReemplazo ? '+ Agregar reemplazo fijo' : '+ Agregar guardia'));
+    soloReemplazo ? null : el('button', { class: 'chico', onclick: () => { filas.push({ dia_semana: 'lunes', turno: '24H', tipo: 'CONTRATO' }); pintarFilas(); } }, '+ Agregar guardia de contrato'),
+    el('button', { class: 'chico', id: 'p-agregar-fijo', onclick: () => { filas.push({ dia_semana: 'lunes', turno: '24H', tipo: 'REEMPLAZO_HOSPITAL' }); pintarFilas(); } }, '+ Agregar reemplazo fijo'));
 }
 async function verContrato() {
   cargando();
@@ -1503,7 +1548,7 @@ async function verContrato() {
     el('div', { class: 'tarjeta' },
       el('h3', { style: 'margin-top:0' }, solo ? 'Reemplazos fijos semanales' : 'Mi guardia fija'),
       el('p', { class: 'suave', style: 'margin-top:0' }, solo ? 'Los reemplazos que hacés todas las semanas. Se piden y se confirman cada día como cualquier guardia. Si son variables, dejalo vacío.'
-        : 'Contrato: 24 h por semana (24 h un día, o 12 h + 12 h). Los reemplazos fijos se piden y se confirman cada día como cualquier guardia.'),
+        : 'Contrato: 24 h por semana (24 h un día, o 12 h + 12 h). Además podés cargar tus reemplazos fijos semanales (ej.: contrato jueves + reemplazo fijo lunes): se generan solos en tu calendario y se fichan como cualquier guardia.'),
       editorFija(filas, c.dias, c.turnos, solo), el('br'), el('br'),
       el('button', { class: 'grande', onclick: accion(async () => { await llamar('guardarMiFija', filas); aviso = { texto: solo ? 'Reemplazos fijos guardados.' : 'Guardia fija guardada.' }; verContrato(); }) }, 'Guardar')),
     el('div', { class: 'tarjeta' }, el('h3', { style: 'margin-top:0' }, 'Avisos'),

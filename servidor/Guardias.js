@@ -739,6 +739,13 @@ function validarFija_(filas, soloReemplazo) {
     if (vistas[clave]) throw new ErrorUsuario('Elegiste dos veces el mismo turno.');
     vistas[clave] = true;
   });
+  limpias.forEach(function (f, i) {
+    limpias.slice(i + 1).forEach(function (o) {
+      if (o.dia_semana === f.dia_semana && turnosSePisan_(o.turno, f.turno)) {
+        throw new ErrorUsuario('El ' + (DIAS_CON_TILDE[f.dia_semana] || f.dia_semana) + ' se superponen ' + TURNOS[f.turno].nombre + ' y ' + TURNOS[o.turno].nombre + '.');
+      }
+    });
+  });
   const horas = limpias.filter(function (f) { return f.tipo === TIPO.CONTRATO; }).reduce(function (s, f) { return s + TURNOS[f.turno].horas; }, 0);
   if (horas !== 0 && horas !== 24) throw new ErrorUsuario('El contrato tiene que sumar 24 h por semana.');
   return limpias;

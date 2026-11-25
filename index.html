@@ -69,6 +69,26 @@
   .banner-libres { display: block; width: 100%; text-align: left; margin-bottom: 10px; padding: 12px 14px; border-radius: 12px; border: 2px solid #FFD23F; background: #FFF6CC; color: #121826; font-size: 16px; font-weight: 700; cursor: pointer; animation: latido 1.5s ease-in-out infinite; }
   .banner-libres span { display: block; font-size: 13px; font-weight: 400; color: var(--suave); }
   @media (prefers-reduced-motion: reduce) { .dia.libre, .banner-libres, #guardando::before { animation: none; } }
+  /* Mi mes simple: puntos en el calendario */
+  .puntos { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; margin-top: 6px; }
+  .punto { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+  .p-fija { background: #2f6fde; } .p-reemplazo { background: #1f9d55; } .p-ausencia { background: #9aa4b1; }
+  .p-libre { background: #FFD23F; box-shadow: 0 0 0 2px rgba(255, 210, 63, .5); animation: latido 1.5s ease-in-out infinite; }
+  .p-libre.quieto { animation: none; }
+  .dia .num { text-align: center; }
+  .leyenda-mini { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; font-size: 12px; color: var(--suave); margin: 8px 0 14px; }
+  .leyenda-mini .punto { margin-right: 4px; vertical-align: -1px; }
+  .mesnav-i { position: relative; }
+  .mesnav-i .mesnav { padding-right: 0; }
+  button.info { position: absolute; right: 60px; top: 10px; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--borde); background: #fff; color: var(--suave); font: italic 700 14px Georgia, serif; cursor: pointer; }
+  .numeros { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .numeros .numero { text-align: left; cursor: pointer; font: inherit; color: var(--texto); }
+  .numero .n { font-size: 20px; font-weight: 700; }
+  button.linea { display: block; width: 100%; text-align: left; background: none; border: none; padding: 10px 2px; font-size: 16px; font-weight: 600; color: var(--primario); cursor: pointer; }
+  button.linea.libres { color: #8a6500; }
+  .hoy-tarjeta .fichada { color: #17602d; font-weight: 700; font-size: 17px; margin-top: 8px; }
+  .hoy-tarjeta button.grande { margin: 10px 0 0; }
+  @media (prefers-reduced-motion: reduce) { .p-libre { animation: none; } }
   .leyenda { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; font-size: 12px; }
   .leyenda span { border-radius: 5px; padding: 2px 6px; }
   .mesnav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 8px; }
@@ -1024,6 +1044,7 @@ async function verMes() {
     if (!datos || !token || vista !== 'mes' || mesActual !== mes) return;
     if (!mesValido(d)) return mostrarFalla(new Error('Mi mes llegó incompleto (' + mes + ')'));
   }
+  // Mi mes, para entender en 3 segundos: calendario con puntos, "Hoy", dos números, las libres y cargar.
   const primero = (new Date(d.dias[0].fecha + 'T12:00:00').getDay() + 6) % 7;
   const celdas = DIAS_CAB.map((c) => el('div', { class: 'cab' }, c));
   for (let i = 0; i < primero; i++) celdas.push(el('div'));
@@ -1031,43 +1052,68 @@ async function verMes() {
   d.dias.forEach((dia) => {
     const libresDia = dia.vacaciones ? [] : libresMes.filter((l) => l.fecha === dia.fecha);
     const clase = 'dia' + (dia.no_habil ? ' nh' : '') + (dia.fecha === datos.hoy ? ' hoy' : '') + (dia.vacaciones ? ' vac' : '') + (libresDia.length ? ' libre' : '');
-    const fichas = dia.guardias.map((g) => el('span', { class: 'ficha c-' + g.color }, g.texto))
-      .concat(libresDia.map((l) => el('span', { class: 'ficha c-libre' }, etiquetaLibre(l))));
-    // Cualquier día se puede tocar. Si ese día hay guardias libres (de otros puestos) o varias mías, se ve todo junto
-    // en la tarjeta del día; con una sola guardia mía abre esa guardia, y vacío abre la carga.
+    // Puntos: azul = guardia fija, verde = reemplazo, amarillo que late = libre que puedo tomar, gris = ausencia.
+    const puntos = dia.guardias.filter((g) => g.hago !== false).map((g) => el('span', { class: 'punto p-' + (g.clase || (/^C /.test(g.texto) ? 'fija' : 'reemplazo')), 'data-estado': g.color, title: g.texto }))
+      .concat(libresDia.map((l) => el('span', { class: 'punto p-libre', title: etiquetaLibre(l) })))
+      .concat(dia.vacaciones || dia.ausente_turno ? [el('span', { class: 'punto p-ausencia', title: 'Ausente' })] : []);
+    // Si ese día hay guardias libres (de otros puestos) o varias mías, se ve todo junto en la tarjeta del día;
+    // con una sola guardia mía abre esa guardia, y vacío abre la carga.
     const hayLibres = libresDelDia(dia.fecha).length > 0;
     celdas.push(el('button', {
       class: clase,
       'aria-label': 'Día ' + fechaLinda(dia.fecha) + (libresDia.length ? ', guardia libre para tomar' : dia.guardias.length ? ', con guardia' : ', cargar guardia'),
       'data-fecha': dia.fecha,
       onclick: () => (hayLibres || dia.guardias.length > 1 ? verDia(dia.fecha) : dia.guardias.length ? irConfirmar(dia.guardias[0].id) : verCargar(dia.fecha))
-    }, el('span', { class: 'num' }, Number(dia.fecha.slice(8))), fichas));
+    }, el('span', { class: 'num' }, Number(dia.fecha.slice(8))), el('span', { class: 'puntos' }, puntos)));
   });
-  const leyenda = [['libre', 'Libre (la podés tomar)'], ['contrato', 'Contrato'], ['prevista', 'Prevista'], ['confirmada', 'Confirmada'], ['anticipada', 'Por adelantado'], ['cubierta', 'Cubierta'], ['reemplazo', 'Reemplazo'], ['vacaciones', 'Ausente'], ['espera', 'Esperando'], ['conflicto', 'Conflicto']];
+  // "i": la regla y los avisos del mes, plegados.
+  const info = el('div', { class: 'regla', id: 'mes-info', hidden: true }, el('div', null, datos.regla),
+    antesDeLaApp(d.mes + '-01') ? el('div', { id: 'mes-referencia', style: 'margin-top:6px' }, 'Este mes se maneja a mano: tus guardias de contrato se ven solo como referencia. En la app empiezan en ' + nombreMesLargo(datos.primer_mes) + '.')
+      : d.cerrado ? el('div', { style: 'margin-top:6px' }, 'Este mes ya cerró. Lo que falte se carga como "reclamo mes anterior".') : null,
+    d.ventana ? el('div', { style: 'margin-top:6px' }, d.ventana) : null,
+    el('div', { style: 'margin-top:6px' }, 'Lo de este mes se cobra el ' + d.cobro + '.'));
+  const botonInfo = el('button', { class: 'info', id: 'btn-info', 'aria-label': 'Cómo funciona', onclick: () => { info.hidden = !info.hidden; } }, 'i');
+  // Hoy: solo si hoy tengo guardia
+  const deHoy = d.guardias.filter((g) => g.fecha === datos.hoy && g.es_hizo && g.estado !== 'ANULADA');
+  const fichada = (g) => /^CONFIRMADA/.test(g.estado) && !g.control_pendiente;
+  const tarjetaHoy = deHoy.length ? el('div', { class: 'tarjeta hoy-tarjeta', id: 'mes-hoy' }, deHoy.map((g) => el('div', { class: 'hoy-fila' },
+    el('div', { class: 'destacado' }, 'Hoy · Guardia ' + g.turno_nombre),
+    fichada(g) ? el('div', { class: 'fichada' }, 'Fichada ✓')
+      : g.control_pendiente ? el('button', { class: 'grande', id: 'btn-fiche', onclick: () => enFondo('responderControl', [g.id, 'SI'], { cambio: previsto.respondido(g), texto: 'Fichada ✓', ir: 'mes' }) }, 'Fiché')
+      : g.puede_hago_yo && !g.debe_responder ? el('button', { class: 'grande', id: 'btn-fiche', onclick: () => enFondo('hagoYo', [g.id], { cambio: previsto.confirmar(g), texto: 'Fichada ✓', ir: 'mes' }) }, 'Fiché')
+      : g.debe_responder && g.es_hizo && g.estado !== 'EN_CONFLICTO' ? el('button', { class: 'grande', id: 'btn-fiche', onclick: () => enFondo('responder', [g.id, true], { cambio: previsto.respondido(g), texto: 'Fichada ✓', ir: 'mes' }) }, 'Fiché')
+      : el('button', { class: 'grande sec', onclick: () => irConfirmar(g.id) }, 'Abrir')))) : null;
+  // Dos números: fijas y reemplazos (cada uno abre su lista)
+  const fijas = d.guardias.filter((g) => g.tipo === 'CONTRATO' && g.es_titular);
+  const reemplazos = d.guardias.filter((g) => g.tipo !== 'CONTRATO' && g.es_hizo);
+  const diasFijos = [...new Set(fijas.map((g) => DIA_SEMANA[new Date(g.fecha + 'T12:00:00').getDay()].toLowerCase()))].join(', ');
+  const numero = (id, n, titulo, sub, lista) => el('button', { class: 'tarjeta numero', id, onclick: () => verListaMes(titulo, lista) },
+    el('div', { class: 'n' }, n + ' ' + titulo), el('div', { class: 'suave' }, sub));
+  const pendientes = d.pendientes.filter((g) => !deHoy.some((h) => h.id === g.id));
   pintar(
     bloqueAviso(),
-    libresMes.length ? el('button', { class: 'banner-libres', id: 'banner-libres', onclick: () => ir('libres') },
-      libresMes.length === 1 ? 'Hay 1 guardia libre este mes' : 'Hay ' + libresMes.length + ' guardias libres este mes',
-      el('span', null, 'Están marcadas en amarillo en el calendario. Tocá para ver la lista.')) : null,
-    esSolo() ? el('button', { class: 'grande verde', id: 'btn-cargar-reemplazo', onclick: () => verCargar(datos.hoy) }, '+ Cargar reemplazo') : null,
-    el('button', { class: 'grande' + (d.libres ? '' : ' sec'), id: 'btn-libres', onclick: () => ir('libres') }, 'Guardias libres (' + d.libres + ')'),
-    datos.recordar_avisos ? el('div', { class: 'regla' }, 'Todavía no activaste los avisos: no te vamos a poder recordar tus guardias. ',
-      el('button', { class: 'chico', onclick: () => ir('contrato') }, 'Activar avisos')) : null,
-    el('div', { class: 'tarjeta' }, el('div', { class: 'destacado' }, 'Reemplazos confirmados este mes: ' + d.reemplazos + (d.reemplazos ? ', se cobran el ' + d.cobro : '')),
-      d.reemplazos ? null : el('div', { class: 'suave' }, 'Lo de este mes se cobra el ' + d.cobro + '.')),
-    el('div', { class: 'regla' }, datos.regla),
-    antesDeLaApp(d.mes + '-01') ? el('div', { class: 'regla', id: 'mes-referencia' }, 'Este mes se maneja a mano: tus guardias de contrato se ven solo como referencia. En la app empiezan en ' + nombreMesLargo(datos.primer_mes) + '.')
-      : d.cerrado ? el('div', { class: 'regla' }, 'Este mes ya cerró. Lo que falte se carga como "reclamo mes anterior".') : null,
-    d.ventana ? el('div', { class: 'regla' }, d.ventana) : null,
-    d.pendientes.length ? el('div', { class: 'tarjeta' },
-      el('h3', { style: 'margin-top:0' }, 'Para confirmar (' + d.pendientes.length + ')'),
-      d.pendientes.map((g) => el('button', { class: 'grande', onclick: () => irConfirmar(g.id) }, fechaLinda(g.fecha) + ' · ' + g.turno_nombre))) : null,
-    navMes(d.titulo, verMes),
+    el('div', { class: 'mesnav-i' }, navMes(d.titulo, verMes), botonInfo), info,
     el('div', { class: 'cal' }, celdas),
-    el('div', { class: 'leyenda' }, leyenda.map(([c, t]) => el('span', { class: 'c-' + c }, t))),
-    d.guardias.length ? el('div', null, el('h3', null, 'Mis guardias del mes'), d.guardias.map((g) => filaGuardia(g))) : null
+    el('div', { class: 'leyenda-mini' }, el('span', null, el('i', { class: 'punto p-fija' }), 'Fija'), el('span', null, el('i', { class: 'punto p-reemplazo' }), 'Reemplazo'),
+      el('span', null, el('i', { class: 'punto p-libre quieto' }), 'Libre'), el('span', null, el('i', { class: 'punto p-ausencia' }), 'Ausencia')),
+    tarjetaHoy,
+    pendientes.length ? el('button', { class: 'linea', id: 'btn-pendientes', onclick: () => verListaMes('para responder', pendientes) }, '🔔 ' + pendientes.length + ' para responder →') : null,
+    el('div', { class: 'numeros' },
+      numero('n-fijas', fijas.length, fijas.length === 1 ? 'fija' : 'fijas', diasFijos || '—', fijas),
+      numero('n-reemplazos', reemplazos.length, reemplazos.length === 1 ? 'reemplazo' : 'reemplazos', (reemplazos.filter(fichada).length === 1 ? '1 fichado' : reemplazos.filter(fichada).length + ' fichados'), reemplazos)),
+    libresParaMi().length ? el('button', { class: 'linea libres', id: 'btn-libres', onclick: () => ir('libres') }, '⚡ ' + libresParaMi().length + (libresParaMi().length === 1 ? ' guardia libre' : ' guardias libres') + ' →') : null,
+    esSolo() ? el('button', { class: 'grande', id: 'btn-cargar-reemplazo', onclick: () => verCargar(datos.hoy) }, '+ Cargar guardia') : null
   );
 }
+// Lista de las guardias del mes que se abrió desde "Mi mes" (fijas, reemplazos o para responder).
+function verListaMes(titulo, lista) {
+  vista = 'lista';
+  pintarNav();
+  pintar(bloqueAviso(), el('h2', null, capitalLetra(titulo) + ' · ' + nombreMesLargo(mesActual)),
+    lista.length ? lista.map((g) => filaGuardia(g)) : el('div', { class: 'tarjeta suave' }, 'No hay.'),
+    el('button', { class: 'grande sec', onclick: () => ir('mes') }, 'Volver'));
+}
+const capitalLetra = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 function textoCobertura(g) {
   if (g.libre_ajena) return 'Guardia libre que tomaste';
   if (g.es_titular && g.en_bolsa) return 'En la bolsa de guardias libres';

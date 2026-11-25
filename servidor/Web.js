@@ -348,7 +348,8 @@ function apiMiMes_(m, a) {
         vacaciones: ausente === 'TODO',
         ausente_turno: turnoAusente[0] || '',
         guardias: delDia.map(function (g) {
-          return { id: g.id, color: colorPara_(g, m), texto: (g.tipo === TIPO.CONTRATO && g.medico_titular_id === m.id ? 'C ' : '') + g.horas + ' h' };
+          return { id: g.id, color: colorPara_(g, m), clase: g.tipo === TIPO.CONTRATO ? 'fija' : 'reemplazo', hago: g.medico_que_hizo_id === m.id,
+            texto: (g.tipo === TIPO.CONTRATO && g.medico_titular_id === m.id ? 'C ' : '') + g.horas + ' h' };
         }),
         // Turnos que ese día ya hace él: la pantalla no ofrece cargar algo que se superponga.
         ocupado: delDia.filter(function (g) { return g.medico_que_hizo_id === m.id; }).map(function (g) { return g.turno; }).concat(turnoAusente),
